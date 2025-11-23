@@ -42,51 +42,6 @@ def test_basic_fis():
     fis.plot_graph()
 
 
-# ============================================================
-# 2. 新增：TS / CASP 测试（完全对齐你 notebook + R 版本）
-# ============================================================
-def test_ts_model():
-    print("\n==============================")
-    print("     Running TS Model Test    ")
-    print("==============================")
-
-    fis_ts = FuzzyInferenceSystem("ts_model", fis_type="ts")
-
-    # 输入 1
-    fis_ts.add_variable("input", "x1", (0, 1))
-    fis_ts.add_mf("input", 0, "low",  "gaussmf", [0.2, 0.2])
-    fis_ts.add_mf("input", 0, "high", "gaussmf", [0.2, 0.8])
-
-    # 输入 2
-    fis_ts.add_variable("input", "x2", (0, 1))
-    fis_ts.add_mf("input", 1, "low",  "gaussmf", [0.2, 0.2])
-    fis_ts.add_mf("input", 1, "high", "gaussmf", [0.2, 0.8])
-
-    # TS 规则（使用 dictionary）
-    fis_ts.rule = [
-        {   # Rule 1: low × low
-            "antecedent": [0, 0],              # MF indexes
-            "coeff": [0.1, 1.0, 2.0]           # y = 0.1 + 1*x1 + 2*x2
-        },
-        {   # Rule 2: high × high
-            "antecedent": [1, 1],
-            "coeff": [-0.2, -1.0, 3.0]
-        }
-    ]
-
-    # ---- Forward test ----
-    print("\n=== TS Forward Test ===")
-    ts_out = fis_ts.eval([0.5, 0.4])    # 自动转向 eval_ts()
-    print("TS Output:", float(ts_out))
-
-    # ---- Backward (autograd) ----
-    print("\n=== TS Gradient Test ===")
-    x = torch.tensor([0.5, 0.4], requires_grad=True)
-    y = fis_ts.eval_ts(x)
-    y.backward()
-    print("Gradient wrt x:", x.grad)
-
-
 if __name__ == "__main__":
     test_basic_fis()   # 原版 Mamdani
-    test_ts_model()    # 新增 TS
+

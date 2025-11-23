@@ -1,59 +1,42 @@
+# experiments/run_experiment_basic.py
 import os
 import sys
+import csv
 
-sys.path.append(os.path.abspath("."))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.append(ROOT)
 
-from experiments.utils.data_loader import load_dataset
-from experiments.utils.evaluator import rmse
-from experiments.utils.fis_builder import build_basic_fis
-from experiments.train_adam import train_with_adam
-
-from src.trainable_fis import TrainableFIS
+from experiments.utils.datasets import UCI_DATASETS
+from experiments.train_adam import train_one_dataset
 
 
-def run_experiment_basic():
+def main():
+    results = []
 
-    dataset = "Airfoil_self_noise"
-    dataset_path = f"data/datasets/{dataset}.csv"
+    for name in UCI_DATASETS:
+        res = train_one_dataset(
+            name,
+            n_mfs_per_input=3,
+            n_mfs_output=3,
+            n_rules=10,
+            num_epochs=100,
+            lr=1e-3,
+        )
+        results.append(res)
 
-    print("=======================================")
-    print(f" Running BASIC FIS experiment on: {dataset}")
-    print("=======================================")
+    # 保存一个简单的结果表，之后可以对照 CASP 论文最后的表格形式
+    out_path = os.path.join("experiments", "results_adam_basic.csv")
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
-    # -----------------------------
-    # Load dataset
-    # -----------------------------
-    X_train, y_train, X_test, y_test = load_dataset(dataset_path)
-    print("[OK] Dataset loaded")
+    with open(out_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["dataset", "train_mse", "test_mse"])
+        for r in results:
+            writer.writerow([r["dataset"], r["train_mse"], r["test_mse"]])
 
-    # -----------------------------
-    # Build simple FIS
-    # -----------------------------
-    fis, theta_list = build_basic_fis(num_inputs=X_train.shape[1])
-    model = TrainableFIS(fis, theta_list)
-
-    # -----------------------------
-    # Train using ADAM
-    # -----------------------------
-    trained_model = train_with_adam(
-        model,
-        X_train,
-        y_train,
-        lr=0.01,
-        epochs=30
-    )
-
-    # -----------------------------
-    # Evaluate
-    # -----------------------------
-    y_pred_train = trained_model.forward(X_train).detach()
-    y_pred_test = trained_model.forward(X_test).detach()
-
-    print("\n===== RESULTS =====")
-    print(f"Train RMSE = {rmse(y_train, y_pred_train):.4f}")
-    print(f"Test  RMSE = {rmse(y_test, y_pred_test):.4f}")
-    print("===========================")
+    print(f"\nAll datasets finished. Results saved to {out_path}")
 
 
 if __name__ == "__main__":
-    run_experiment_basic()
+    main()
