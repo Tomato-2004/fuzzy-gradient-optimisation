@@ -4,7 +4,7 @@ import sys
 import numpy as np
 import torch
 
-# 让 Python 找到 src
+# 让 Python 找到 src 包
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.append(ROOT)
@@ -27,10 +27,23 @@ def train_one_dataset(
     point_n: int = 101,
     random_state: int = 0,
 ):
+    """
+    用 Adam 在单个数据集上训练一个 Mamdani FIS 模型。
+
+    步骤：
+        1. 读取数据集（train/test 划分）
+        2. genfis: 用数据范围构造初始 FIS（Gaussian MFs）
+        3. genrule: 用 k-means 在 [X, y] 上聚类生成规则
+        4. TrainableFIS 封装 + Adam 训练
+        5. 返回 train/test MSE 和训练 loss 曲线
+    """
     print(f"\n===== Training dataset: {dataset_name} =====")
 
-    X_train, X_test, y_train, y_test = load_dataset(dataset_name, test_size=0.2,
-                                                    random_state=random_state)
+    X_train, X_test, y_train, y_test = load_dataset(
+        dataset_name,
+        test_size=0.2,
+        random_state=random_state,
+    )
 
     # 1. 用数据构造初始 FIS（genfis）
     fis = build_initial_fis_from_data(
@@ -48,7 +61,7 @@ def train_one_dataset(
         y_train,
         n_rules=n_rules,
         weight=1.0,
-        and_or=1,
+        and_or=1,  # AND (min)
         random_state=random_state,
     )
 
@@ -58,6 +71,7 @@ def train_one_dataset(
     model = TrainableFIS(fis)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Using device: {device}")
 
     # 4. 用 Adam 训练
     trained_model, history = train_with_adam(
@@ -74,7 +88,7 @@ def train_one_dataset(
     )
 
     # 5. 计算最终 MSE（train / test）
-    model.eval()
+    trained_model.eval()
     with torch.no_grad():
         X_train_t = torch.tensor(X_train, dtype=torch.float32).to(device)
         X_test_t = torch.tensor(X_test, dtype=torch.float32).to(device)
@@ -85,8 +99,8 @@ def train_one_dataset(
         train_mse = float(np.mean((y_train_pred.reshape(-1) - y_train) ** 2))
         test_mse = float(np.mean((y_test_pred.reshape(-1) - y_test) ** 2))
 
-    print(f"[{dataset_name}] Final train MSE = {train_mse:.4f}, "
-          f"test MSE = {test_mse:.4f}")
+    print(f"[{dataset_name}] Final train MSE = {train_mse:.6f}, "
+          f"test MSE = {test_mse:.6f}")
 
     return {
         "dataset": dataset_name,
@@ -94,19 +108,3 @@ def train_one_dataset(
         "test_mse": test_mse,
         "history": history,
     }
-
-
-if __name__ == "__main__":
-    # 先跑一个数据集试试，例如 Abalone
-    result = train_one_dataset(
-    "Abalone",
-    n_mfs_per_input=2,   # ↓ 输入 MF 少一点
-    n_mfs_output=2,      # ↓ 输出 MF 少一点
-    n_rules=5,           # ↓ 规则数少一点
-    num_epochs=20,       # ↓ epoch 少一点
-    lr=5e-3,             # ↑ 提高学习率（更快收敛）
-    batch_size=16,       # ↓ batch 更小（更快）
-    point_n=31,          # ↓ defuzz 点数减少
-    )
-
-    print(result["dataset"], "done.")

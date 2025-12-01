@@ -12,6 +12,10 @@ from experiments.train_adam import train_one_dataset
 
 
 def main():
+    """
+    用 Adam 在若干 UCI 数据集上跑一轮基准实验，
+    结果写到 experiments/results_adam_basic.csv 中。
+    """
     results = []
 
     for name in UCI_DATASETS:
