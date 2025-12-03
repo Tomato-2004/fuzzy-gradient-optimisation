@@ -1,5 +1,8 @@
+# src/optimisation/pso_optimizer.py
+
 import numpy as np
 import torch
+
 
 def evaluate_fis(trainable_fis, X, y, point_n=25):
     """计算 MSE（PSO 的 fitness）"""
@@ -7,24 +10,6 @@ def evaluate_fis(trainable_fis, X, y, point_n=25):
     X_t = torch.tensor(X, dtype=torch.float32)
     preds = trainable_fis(X_t, point_n=point_n).detach().numpy()
     return np.mean((preds.reshape(-1) - y) ** 2)
-
-
-def flatten_params(trainable_fis):
-    """把所有 MF 参数展平成一个 vector"""
-    vec = []
-    for p in trainable_fis.mf_params:
-        vec.append(p.data.cpu().numpy().reshape(-1))
-    return np.concatenate(vec)
-
-
-def assign_params(trainable_fis, vec):
-    """把 vector 写回 FIS 内部参数"""
-    idx = 0
-    for p in trainable_fis.mf_params:
-        n = p.numel()
-        block = vec[idx:idx+n]
-        idx += n
-        p.data = torch.tensor(block, dtype=torch.float32).view_as(p.data)
 
 
 def train_with_pso(
@@ -37,7 +22,8 @@ def train_with_pso(
 ):
     """PSO 粒子群优化器（非梯度）"""
 
-    dim = len(flatten_params(trainable_fis))
+    # 使用 TrainableFIS 自带的参数接口
+    dim = len(trainable_fis.flatten_params())
 
     w = 0.7
     c1 = c2 = 1.5
@@ -54,7 +40,10 @@ def train_with_pso(
     for epoch in range(epochs):
 
         for i in range(swarm_size):
-            assign_params(trainable_fis, swarm_pos[i])
+            # 写回参数
+            trainable_fis.assign_params(swarm_pos[i])
+
+            # 计算 Fitness
             val = evaluate_fis(trainable_fis, X_train, y_train, point_n)
 
             if val < pbest_val[i]:
@@ -79,6 +68,6 @@ def train_with_pso(
         print(f"[PSO Epoch {epoch+1}/{epochs}] best_mse = {gbest_val:.6f}")
 
     # 写回最终参数
-    assign_params(trainable_fis, gbest_pos)
+    trainable_fis.assign_params(gbest_pos)
 
     return trainable_fis
