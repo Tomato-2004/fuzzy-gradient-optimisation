@@ -13,7 +13,7 @@ if ROOT not in sys.path:
 from experiments.experiment_config import CONFIG
 from experiments.initialisation_registry import build_fis_from_config
 from experiments.optimiser_registry import OPTIMISERS
-from experiments.utils.datasets import UCI_DATASETS, load_dataset
+from experiments.utils.datasets import ALL_DATASETS, load_dataset
 
 from src.trainable_fis import TrainableFIS
 
@@ -65,7 +65,7 @@ def run_single_dataset():
 
 def run_all_datasets():
     """
-    跑所有 UCI 数据集（一次只跑 config 指定的优化器）
+    跑所有数据集（一次只跑 config 指定的优化器）
     并输出 CSV。
     """
 
@@ -75,7 +75,7 @@ def run_all_datasets():
     init_cfg = CONFIG["initialisation"]
     results = []
 
-    for ds_name in UCI_DATASETS:
+    for ds_name in ALL_DATASETS:
         print("\n----------------------------------------")
         print(f"Dataset: {ds_name}")
         print("----------------------------------------")

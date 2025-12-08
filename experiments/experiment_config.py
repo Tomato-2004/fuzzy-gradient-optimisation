@@ -29,7 +29,7 @@ CONFIG = {
         #   "adam"         → train_with_adam（梯度法）
         #   "pso"          → train_with_pso（非梯度：粒子群）
         #   （未来你可以新增 "ga", "de", "sa", "cmaes" 等进化优化方法）
-        "method": "pso",
+        "method": "adam",
 
         # PSO 的超参数（仅当 method = "pso" 时有效）
         "params": {
