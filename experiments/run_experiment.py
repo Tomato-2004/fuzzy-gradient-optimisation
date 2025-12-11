@@ -1,4 +1,3 @@
-
 import os
 import sys
 import csv
@@ -70,9 +69,11 @@ def run_all_datasets():
     """
 
     opt_method = CONFIG["optimiser"]["method"]
-    print(f"\n=== Running ALL datasets with optimiser: {opt_method} ===\n")
-
     init_cfg = CONFIG["initialisation"]
+    mf_method = init_cfg["mf_method"]
+
+    print(f"\n=== Running ALL datasets with optimiser: {opt_method} (init={mf_method}) ===\n")
+
     results = []
 
     for ds_name in ALL_DATASETS:
@@ -117,22 +118,32 @@ def run_all_datasets():
         results.append({
             "dataset": ds_name,
             "optimiser": opt_method,
+            "initialisation": mf_method,
             "test_mse": mse,
         })
 
     # ===== write CSV =====
-    out_path = os.path.join("experiments", f"results_all_{opt_method}.csv")
+    out_path = os.path.join(
+        "experiments",
+        f"results_all_{mf_method}_{opt_method}.csv"
+    )
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
     with open(out_path, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["dataset", "optimiser", "test_mse"])
+        writer.writerow(["dataset", "optimiser", "initialisation", "test_mse"])
         for r in results:
-            writer.writerow([r["dataset"], r["optimiser"], r["test_mse"]])
+            writer.writerow([
+                r["dataset"],
+                r["optimiser"],
+                r["initialisation"],
+                r["test_mse"]
+            ])
 
     print(f"\nFinished ALL datasets. Results saved to: {out_path}\n")
 
 
+
 if __name__ == "__main__":
-    #run_single_dataset()     
-    run_all_datasets()         
+    # run_single_dataset()  
+    run_all_datasets()

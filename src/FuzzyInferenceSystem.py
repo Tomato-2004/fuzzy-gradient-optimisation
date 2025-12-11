@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import networkx as nx
+import torch.nn.functional as F 
 
 
 # ============================================================
@@ -135,6 +136,19 @@ class FuzzyInferenceSystem:
     def evalmf(self, x, mf_type, params):
 
         x = torch.as_tensor(x, dtype=torch.float32, device=self.device)
+
+        if mf_type.startswith("gaussmf_casp"):
+    # params = [raw_sigma, raw_center]
+            raw_sigma = params[0]
+            raw_center = params[1]
+
+    # CASP reparameterization
+            sigma = F.softplus(raw_sigma) + 1e-4
+            center = raw_center
+
+    # 正确的 Gaussian MF 计算
+            return torch.exp(-((x - center) ** 2) / (2 * sigma ** 2))
+
 
         if mf_type == "trimf":
             p = reparam_trimf(params)

@@ -1,54 +1,49 @@
+# experiments/initialisation_registry.py
 
 from typing import Dict, Any
 
-from src.rule_generator.genfis import build_initial_fis_from_data
+from src.rule_generator.genfis import (
+    build_fis_heuristic,
+    build_fis_casp_single,
+    build_fis_casp_free,
+    build_fis_casp_adapt,
+    build_fis_random_gauss,
+    build_fis_kmeans_mf,
+)
+
 from src.rule_generator.genrule import genrules_kmeans
 
 
-
-def _mf_init_heuristic(X, y, n_mf: int):
-    """
-    使用 build_initial_fis_from_data:
-        - 输入每个变量 n_mf 个 Gaussian MF
-        - 输出变量 n_mf 个 Gaussian MF
-    跟你原先 basic 实验中的做法一致。
-    """
-    fis = build_initial_fis_from_data(
-        X,
-        y,
-        n_mfs_per_input=n_mf,
-        n_mfs_output=n_mf,
-    )
-    return fis
-
+# ======================================================
+# 所有 MF 初始化方法
+# ======================================================
 
 MF_INITIALISERS = {
-    "heuristic": _mf_init_heuristic,
-
+    "heuristic": build_fis_heuristic,
+    "casp_single": build_fis_casp_single,
+    "casp_free": build_fis_casp_free,
+    "casp_adapt": build_fis_casp_adapt,
+    "random_gauss": build_fis_random_gauss,
+    "kmeans_mf": build_fis_kmeans_mf,
 }
 
-
+# ======================================================
+# Rule Generators
+# ======================================================
 
 def _rule_gen_kmeans(fis, X, y, n_rules: int, **kwargs):
-  
-    genrules_kmeans(
-        fis,
-        X,
-        y,
-        n_rules=n_rules,
-        
-    )
-
+    genrules_kmeans(fis, X, y, n_rules=n_rules)
 
 RULE_GENERATORS = {
     "kmeans": _rule_gen_kmeans,
-
 }
 
 
+# ======================================================
+# 主函数：根据配置 build FIS
+# ======================================================
 
 def build_fis_from_config(X, y, init_cfg: Dict[str, Any]):
- 
     mf_method = init_cfg.get("mf_method", "heuristic")
     rule_method = init_cfg.get("rule_method", "kmeans")
     n_mf = init_cfg.get("n_mf", 3)
@@ -60,8 +55,10 @@ def build_fis_from_config(X, y, init_cfg: Dict[str, Any]):
     if rule_method not in RULE_GENERATORS:
         raise ValueError(f"Unknown rule_method: {rule_method}")
 
+    # ---- 1. MF 初始化 ----
     fis = MF_INITIALISERS[mf_method](X, y, n_mf=n_mf)
 
+    # ---- 2. 规则初始化 ----
     RULE_GENERATORS[rule_method](fis, X, y, n_rules=n_rules)
 
     return fis
