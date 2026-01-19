@@ -47,12 +47,8 @@ ALL_DATASETS = UCI_DATASETS + KEEL_DATASETS + SUBSET_DATASETS
 
 def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """
-    通用数据清洗：
-        - 将字符串缺失替换为 NaN
-        - 所有列转换为 float
-        - 删除全空列
-        - 用列均值填充 NaN
-        - MinMax 归一化
+    clean datasets
+
     """
     df = df.replace(["?", " ", ""], np.nan)
 
@@ -67,12 +63,7 @@ def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def load_dataset(name: str, test_size: float = 0.2, random_state: int = 0):
-    """
-    从 data/datasets/{name}.csv 读取数据。
-    最后一列为 y（目标）。
-    返回：
-        X_train, X_test, y_train, y_test
-    """
+
     csv_path = os.path.join(DATA_DIR, f"{name}.csv")
     if not os.path.exists(csv_path):
         raise FileNotFoundError(f"{csv_path} not found.")
@@ -94,15 +85,15 @@ def get_all_datasets():
 
 
 def print_dataset_shapes():
-    """打印所有数据集的尺寸方便调试"""
-    print("\n📊 Dataset Shapes:")
+    """Print datasets"""
+    print("\n Dataset Shapes:")
     for name in ALL_DATASETS:
         path = os.path.join(DATA_DIR, f"{name}.csv")
         if os.path.exists(path):
             df = pd.read_csv(path)
             print(f"{name:12s} → {df.shape}")
         else:
-            print(f"{name:12s} → ❌ missing")
+            print(f"{name:12s} → missing")
 
 
 if __name__ == "__main__":

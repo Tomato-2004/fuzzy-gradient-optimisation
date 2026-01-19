@@ -4,13 +4,13 @@ from torch.utils.data import DataLoader, TensorDataset
 from typing import Dict, Any, Callable, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    # 仅用于类型提示，运行时不会真正导入，避免循环依赖
+
     from ..trainable_fis import TrainableFIS
 
 
 def create_dataloader(X, y, batch_size: int, shuffle: bool = True) -> DataLoader:
     """
-    把 (X, y) 包装成 DataLoader，统一 tensor 类型 & 形状。
+    wrape (X, y) to DataLoader， tensor types&shape
     """
     if not isinstance(X, torch.Tensor):
         X = torch.tensor(X, dtype=torch.float32)
@@ -42,13 +42,7 @@ def train_with_adam(
     device: str = "cpu",
     callbacks: Optional[Dict[str, Callable[[Dict[str, Any]], None]]] = None,
 ):
-    """
-    用 Adam 训练一个 TrainableFIS（即你的 Mamdani FIS + 可学习 MF 参数）。
-
-    说明：
-        - 保持接口通用，后续可以复用这个 train_with_* 接口给 GA/PSO 等非梯度方法。
-        - point_n 传给 fis.eval，用于 defuzz 时的输出 universo 采样点数。
-    """
+    
     callbacks = callbacks or {}
     model = trainable_fis.to(device)
 
@@ -93,7 +87,7 @@ def train_with_adam(
         avg_train_loss = running_loss / n_samples
         history["train_loss"].append(avg_train_loss)
 
-        # 验证集
+        
         if val_loader is not None:
             model.eval()
             with torch.no_grad():
@@ -114,7 +108,7 @@ def train_with_adam(
 
         history["val_loss"].append(avg_val_loss)
 
-        # 简单日志
+        
         if epoch % max(1, num_epochs // 10) == 0 or epoch == 1:
             if avg_val_loss is not None:
                 print(f"[Epoch {epoch:4d}/{num_epochs}] "
@@ -123,7 +117,6 @@ def train_with_adam(
                 print(f"[Epoch {epoch:4d}/{num_epochs}] "
                       f"train_loss={avg_train_loss:.6f}")
 
-        # 回调钩子（例如早停 / 可视化）
         if "on_epoch_end" in callbacks:
             callbacks["on_epoch_end"](
                 {

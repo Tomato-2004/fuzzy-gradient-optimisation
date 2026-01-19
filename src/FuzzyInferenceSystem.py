@@ -29,10 +29,7 @@ def reparam_trapmf(params):
 # FuzzyInferenceSystem (Mamdani Type-1, tensorized)
 # ============================================================
 class FuzzyInferenceSystem:
-    """
-    完全保留原有功能（fuzzyR接口、绘图、eval单样本）。
-    新增 eval_batch() 用于训练时提升速度。
-    """
+  
 
     def __init__(self, name, fis_type="mamdani", mf_type="t1",
                  and_method="min", or_method="max",
@@ -131,22 +128,21 @@ class FuzzyInferenceSystem:
             raise NotImplementedError
 
     # ============================================================
-    # evalmf (safe param)
+    # evalmf 
     # ============================================================
     def evalmf(self, x, mf_type, params):
 
         x = torch.as_tensor(x, dtype=torch.float32, device=self.device)
 
         if mf_type.startswith("gaussmf_casp"):
-    # params = [raw_sigma, raw_center]
+   
             raw_sigma = params[0]
             raw_center = params[1]
 
-    # CASP reparameterization
+
             sigma = F.softplus(raw_sigma) + 1e-4
             center = raw_center
 
-    # 正确的 Gaussian MF 计算
             return torch.exp(-((x - center) ** 2) / (2 * sigma ** 2))
 
 
@@ -159,6 +155,7 @@ class FuzzyInferenceSystem:
 
         if mf_type == "gaussmf":
             sigma, c = p
+            sigma = torch.clamp(sigma, min=1e-4)
             return torch.exp(-((x - c)**2) / (2 * sigma**2))
 
         elif mf_type == "gbellmf":
@@ -368,61 +365,49 @@ class FuzzyInferenceSystem:
         plt.show()
 
     # ============================================================
-    # plot_graph (修复版本)
+    # plot_graph 
     # ============================================================
     def plot_graph(self):
         G = nx.DiGraph()
 
-        # 输入变量节点
         input_nodes = [f"Input: {v['name']}" for v in self.input]
 
-        # 输出变量节点
         output_var_nodes = [f"OutputVar: {v['name']}" for v in self.output]
 
-        # 输出 MF 节点
         output_mf_nodes = []
         for ov in self.output:
             for mf in ov["mf"]:
                 output_mf_nodes.append(f"MF: {mf['name']}")
 
-        # 规则节点
         rule_nodes = [f"Rule {i+1}" for i in range(len(self.rule))]
 
         G.add_nodes_from(input_nodes + rule_nodes + output_var_nodes + output_mf_nodes)
 
-        # 输入 → 规则
         for r_i, rule in enumerate(self.rule):
             for j, val in enumerate(rule[:len(self.input)]):
                 if val != 0:
                     G.add_edge(input_nodes[j], rule_nodes[r_i])
 
-            # 规则 → 输出 MF
             cons_idx = abs(rule[len(self.input)]) - 1
             mf_name = self.output[0]["mf"][cons_idx]["name"]
             G.add_edge(rule_nodes[r_i], f"MF: {mf_name}")
 
-        # 输出变量 → 输出 MF
         for ov in self.output:
             var_node = f"OutputVar: {ov['name']}"
             for mf in ov["mf"]:
                 G.add_edge(var_node, f"MF: {mf['name']}")
 
-        # 节点布局
         pos = {}
 
-        # 输入在左
         for i, node in enumerate(input_nodes):
             pos[node] = (0, -i)
 
-        # 规则在中
         for i, node in enumerate(rule_nodes):
             pos[node] = (1, -i)
 
-        # 输出变量靠右
         for i, node in enumerate(output_var_nodes):
             pos[node] = (2, -(i*2))
 
-        # 输出 MF 最右
         for i, node in enumerate(output_mf_nodes):
             pos[node] = (3, -i)
 
@@ -434,13 +419,12 @@ class FuzzyInferenceSystem:
         plt.show()
 
     # ============================================================
-    # NEW: eval_batch (vectorized, FAST for training)
+    # eval_batch (vectorized, FAST for training)
     # ============================================================
     def eval_batch(self, X, point_n=101):
         """
         X: (batch, n_inputs)
         return: (batch,) tensor
-        NOTE: 完全 vectorized，不改变 eval() 行为，只用于训练
         """
         X = torch.as_tensor(X, dtype=torch.float32, device=self.device)
         batch, n_inputs = X.shape
@@ -482,7 +466,7 @@ class FuzzyInferenceSystem:
             firing = firing * rule[-2]
             fires.append(firing)
 
-        fires = torch.stack(fires, dim=0)  # (n_rules, batch)
+        fires = torch.stack(fires, dim=0)  
 
         # ---------- aggregation ----------
         y = torch.linspace(

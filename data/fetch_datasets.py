@@ -4,10 +4,9 @@ import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 
 SRC_DIR = "data/datasets"
-DST_DIR = "data/datasets"  # 直接覆盖原文件，也可以改成新文件夹
+DST_DIR = "data/datasets"  
 os.makedirs(DST_DIR, exist_ok=True)
 
-# Current datasets (17 total)
 DATASETS = [
     "Abalone",
     "Airfoil",
@@ -43,19 +42,15 @@ def clean_dataset(name):
 
     df = pd.read_csv(src_path)
 
-    # Ensure numeric conversion
     df = df.apply(pd.to_numeric, errors='coerce')
 
-    # Fill NaN with column mean
     df = df.fillna(df.mean())
 
     # Normalize
     scaler = MinMaxScaler()
     df[df.columns] = scaler.fit_transform(df)
 
-    # Move last column to be target (if not already last)
     if df.columns[-1].lower() not in ["target", "class", "output"]:
-        # Assume last column currently is the target — do nothing
         pass
 
     # Save

@@ -3,11 +3,13 @@
 from typing import Dict, Any
 
 from src.optimisation.adam_optimizer import train_with_adam
+from src.optimisation.sgd_optimizer import train_with_sgd
+from src.optimisation.rmsprop_optimizer import train_with_rmsprop
+
 from src.optimisation.pso_optimizer import train_with_pso
 from src.optimisation.ga_optimizer import train_with_ga
-from src.optimisation.de_optimizer import train_with_de   # ← 新增
+from src.optimisation.de_optimizer import train_with_de
 from src.optimisation.cmaes_optimizer import train_with_cmaes
-
 
 
 # ============================
@@ -26,6 +28,50 @@ def run_adam(model, X_train, y_train, config: Dict[str, Any]):
         num_epochs=p.get("num_epochs", 100),
         batch_size=p.get("batch_size", 64),
         lr=p.get("lr", 1e-3),
+        weight_decay=p.get("weight_decay", 0.0),
+        point_n=p.get("point_n", 101),
+        device="cpu",
+    )
+    return trained_model, history
+
+
+# ============================
+# SGD / SGD + Momentum
+# ============================
+def run_sgd(model, X_train, y_train, config: Dict[str, Any]):
+
+    p = config["adam_params"]  # 复用参数
+
+    trained_model, history = train_with_sgd(
+        model,
+        X_train,
+        y_train,
+        num_epochs=p.get("num_epochs", 100),
+        batch_size=p.get("batch_size", 64),
+        lr=1e-2,
+        momentum=0.9,
+        weight_decay=p.get("weight_decay", 0.0),
+        point_n=p.get("point_n", 101),
+        device="cpu",
+    )
+    return trained_model, history
+
+
+# ============================
+# RMSProp
+# ============================
+def run_rmsprop(model, X_train, y_train, config: Dict[str, Any]):
+
+    p = config["adam_params"]  # 复用参数
+
+    trained_model, history = train_with_rmsprop(
+        model,
+        X_train,
+        y_train,
+        num_epochs=p.get("num_epochs", 100),
+        batch_size=p.get("batch_size", 64),
+        lr=1e-3,
+        alpha=0.99,
         weight_decay=p.get("weight_decay", 0.0),
         point_n=p.get("point_n", 101),
         device="cpu",
@@ -90,9 +136,15 @@ def run_de(model, X_train, y_train, config: Dict[str, Any]):
     )
     return trained_model, None
 
-def run_cmaes(model, X_train, y_train, config):
+
+# ============================
+# CMA-ES
+# ============================
+def run_cmaes(model, X_train, y_train, config: Dict[str, Any]):
+
     p = config["cmaes_params"]
-    trained = train_with_cmaes(
+
+    trained_model = train_with_cmaes(
         model,
         X_train,
         y_train,
@@ -101,17 +153,18 @@ def run_cmaes(model, X_train, y_train, config):
         sigma_init=p.get("sigma_init", 0.1),
         point_n=p.get("point_n", 25),
     )
-    return trained, None
-
+    return trained_model, None
 
 
 # ============================
-# 注册表（唯一入口）
+# Optimiser registry
 # ============================
 OPTIMISERS = {
     "adam": run_adam,
+    "sgd": run_sgd,
+    "rmsprop": run_rmsprop,
     "pso": run_pso,
     "ga": run_ga,
     "de": run_de,
-    "cmaes": run_cmaes,   # ← 新增
+    "cmaes": run_cmaes,
 }

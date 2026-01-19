@@ -2,7 +2,7 @@ import os
 import pandas as pd
 
 ROOT_DIR = "data"
-SRC_DIR = ROOT_DIR                # source files are here
+SRC_DIR = ROOT_DIR                
 DST_DIR = os.path.join(ROOT_DIR, "datasets")
 
 def ensure_dir(path):

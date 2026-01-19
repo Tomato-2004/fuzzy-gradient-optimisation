@@ -13,10 +13,7 @@ from experiments.train_pso import train_one_dataset_pso
 
 def main():
     """
-    在所有 UCI 数据集上分别运行：
-        - Adam 优化
-        - PSO 优化（非梯度）
-    输出结果到 experiments/results_compare_adam_pso.csv
+    test use: for single optimiser
     """
 
     results = []
@@ -27,7 +24,7 @@ def main():
         print(f"Running dataset: {name}")
         print("======================================\n")
 
-        # ===== 运行 Adam =====
+        # =====  Adam =====
         res_adam = train_one_dataset(
             dataset_name=name,
             n_mfs_per_input=3,
@@ -37,13 +34,13 @@ def main():
             lr=1e-3,
         )
 
-        # ===== 运行 PSO =====
+        # =====  PSO =====
         res_pso = train_one_dataset_pso(
             dataset_name=name,
             n_mfs_per_input=3,
             n_mfs_output=3,
             n_rules=10,
-            num_epochs=30,      # PSO 通常更慢，可以设少一些
+            num_epochs=30,      
             swarm_size=20,
         )
 
@@ -55,7 +52,7 @@ def main():
             "pso_test_mse":   res_pso["test_mse"],
         })
 
-    # === 保存到 CSV ===
+    # === CSV ===
     out_path = os.path.join("experiments", "results_compare_adam_pso.csv")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 

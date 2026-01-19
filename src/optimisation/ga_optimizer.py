@@ -5,7 +5,7 @@ import torch
 
 
 # =======================
-# Fitness 评估
+# Fitness 
 # =======================
 def evaluate_fis(trainable_fis, X, y, point_n=25):
     trainable_fis.eval()
@@ -15,7 +15,7 @@ def evaluate_fis(trainable_fis, X, y, point_n=25):
 
 
 # =======================
-# GA 优化器
+# GA 
 # =======================
 def train_with_ga(
     trainable_fis,
@@ -30,10 +30,8 @@ def train_with_ga(
 
     dim = len(trainable_fis.flatten_params())
 
-    # 初始化种群（每个个体是一个参数向量）
     pop = np.random.randn(pop_size, dim) * 0.1
 
-    # 个体评估
     def fitness(ind):
         trainable_fis.assign_params(ind)
         return evaluate_fis(trainable_fis, X_train, y_train, point_n)
@@ -42,20 +40,16 @@ def train_with_ga(
 
     for gen in range(n_generations):
 
-        # 排序（从低 mse 到高 mse）
         idx = scores.argsort()
         pop = pop[idx]
         scores = scores[idx]
 
-        # 保留精英
         elites = pop[:2]
 
-        # 新种群
         new_pop = elites.copy()
 
         while len(new_pop) < pop_size:
 
-            # 交叉
             if np.random.rand() < crossover_rate:
                 p1, p2 = pop[np.random.randint(pop_size)], pop[np.random.randint(pop_size)]
                 mask = np.random.rand(dim) < 0.5
@@ -63,7 +57,6 @@ def train_with_ga(
             else:
                 child = pop[np.random.randint(pop_size)].copy()
 
-            # 变异
             if np.random.rand() < mutation_rate:
                 child += 0.1 * np.random.randn(dim)
 
