@@ -1,124 +1,117 @@
-# experiments/experiment_config.py
+from __future__ import annotations
 
-CONFIG = {
+# ======================================================
+# Global
+# ======================================================
+SEED = 0
+DEVICE = "cpu"
 
-    # ========== dataset ==========
-    "dataset": "Airfoil",
+# ======================================================
+# Experiment control
+# ======================================================
+DATASET = "airfoil"  
+FOLD = 1
+INIT_SOURCE = "kmeans"
+OPTIMISER_NAME = "cmaes"
 
+# ======================================================
+# CASPs
+# ======================================================
+CASP_MODE = "free"   # "single" | "adapted" | "free"
 
-    # ========== initial methods ==========
-    # mf_method:
-    #   "heuristic"   
-    #   "casp_single" 
-    #   "casp_adapt"  
-    #   "random_gauss" 
-    #   "kmeans_mf" 
+# ======================================================
+# Training schedule
+# ======================================================
+EPOCHS = 300
+LOG_EPOCHS = [1,10, 50, 100, 150, 200, 250, 300]
 
-    #
-    # rule_method:
-    #   "kmeans"      ）
-    #
-    "initialisation": {
-        "mf_method": "heuristic",
-        "rule_method": "kmeans",
-        "n_mf": 3,
-        "n_rules": 10,
+# ======================================================
+# Dataset registry
+# ======================================================
+DATASET_CONFIG = {
+
+    
+    "airfoil": {
+        "use_pca": False,
+        "num_mfs": [7,5,5,3,7,3],
+        "theta_inputs_normalised": True,    
+        "input_range_normalised": True,     
     },
 
-
-    # ========== optimisers ==========
-    # optimiser["method"]:
-    #   "adam"   
-    #   "pso"    
-    #   "ga"    
-    #   "de"     
-    #   "cmaes"  
-    #   "sgd"
-    #   "rmsprop"
-    "optimiser": {
-        "method": "rmsprop",
+    "autompg6": {
+        "use_pca": False,
+        "num_mfs": [3,4,4,4,4,9],
+        "theta_inputs_normalised": False,
+        "input_range_normalised": False,
     },
 
-
-    # ================================
-    # Adam 参数
-    # ================================
-    "adam_params": {
-        "num_epochs": 100,
-        "batch_size": 64,
-        "lr": 1e-3,
-        "weight_decay": 0.0,
-        "point_n": 101,
+    "laser": {
+        "use_pca": False,
+        "num_mfs": [5, 9, 9, 9, 9],
+        "theta_inputs_normalised": False,  
+        "input_range_normalised": False,    
     },
 
-
-    # ================================
-    # PSO 参数
-    # ================================
-    "pso_params": {
-        "epochs": 30,
-        "swarm_size": 20,
-        "point_n": 101,
+    # ---------- PCA ----------
+    "abalone": {
+        "use_pca": True,
+        "num_mfs": [3,3,4,7,4,6],
+        "theta_inputs_normalised": False,
+        "input_range_normalised": False,
     },
 
-
-    # ================================
-    # GA 参数
-    # ================================
-    "ga_params": {
-        "pop_size": 30,
-        "n_generations": 50,
-        "mutation_rate": 0.1,
-        "crossover_rate": 0.7,
-        "point_n": 101,
+    "concrete": {
+        "use_pca": True,
+        "num_mfs": [4,3,4,4,4,9],
+        "theta_inputs_normalised": True,
+        "input_range_normalised": True,
     },
 
-
-    # ================================
-    # DE 参数（差分进化）
-    # ================================
-    "de_params": {
-        "pop_size": 30,
-        "F": 0.5,
-        "CR": 0.9,
-        "n_generations": 50,
-        "point_n": 101,
+    "ankara": {
+        "use_pca": True,
+        "num_mfs": [3,3,3,3,3,8],
+        "theta_inputs_normalised": True,
+        "input_range_normalised": True,
     },
 
-
-    # ================================
-    # CMA-ES 参数
-    # ================================
-    "cmaes_params": {
-        "n_generations": 50,
-        "population": 20,
-        "sigma_init": 0.1,
-        "point_n": 101,
+    "izmir": {
+        "use_pca": True,
+        "num_mfs": [3,8,4,3,3,9],
+        "theta_inputs_normalised": True,
+        "input_range_normalised": True,
     },
 
-    # ================================
-    # RMSProp 参数（用于 gradient-only 对比实验）
-    # ================================
-    "rmsprop_params": {
-        "num_epochs": 100,
-        "batch_size": 64,
-        "lr": 1e-3,
-        "alpha": 0.99,
-        "weight_decay": 0.0,
-        "point_n": 101,
+    "baseball": {
+        "use_pca": True,
+        "num_mfs": [3,3,3,6,3,9],
+        "theta_inputs_normalised": True,
+        "input_range_normalised": True,
     },
 
-    # ================================
-    # SGD 参数（gradient baseline）
-    # ================================
-    "sgd_params": {
-        "num_epochs": 100,
-        "batch_size": 64,
-        "lr": 1e-3,        # 👈 推荐用 1e-3
-        "momentum": 0.9,
-        "weight_decay": 0.0,
-        "point_n": 101,
+    "treasury": {
+        "use_pca": True,
+        "num_mfs": [9,6,9,9,7,6],
+        "theta_inputs_normalised": True,
+        "input_range_normalised": True,
     },
 
+    "wine": {
+        "use_pca": True,
+        "num_mfs": [4,4,3,3,3,3],
+        "theta_inputs_normalised": True,
+        "input_range_normalised": True,
+    },
+}
 
+# ======================================================
+# Optimiser hyperparameters
+# ======================================================
+OPTIMISER_CONFIG = {
+    "adam": {"lr": 0.03, "amsgrad": False, "weight_decay": 0.0},
+    "sgd": {"lr": 0.003, "momentum": 0.9, "weight_decay": 0.0, "nesterov": False},
+    "rmsprop": {"lr": 0.001, "alpha": 0.99, "weight_decay": 0.0, "momentum": 0.0},
+    "pso": {"pop_size": 30, "iters": 10, "w": 0.9, "c1": 1.2, "c2": 1.2},
+    "ga": {"pop_size": 30, "iters": 10, "mutation_rate": 0.05},
+    "de": {"pop_size": 30, "iters": 10, "F": 0.5, "CR": 0.9},
+    "cmaes": {"pop_size": 30, "iters": 10, "sigma": 0.1},
 }

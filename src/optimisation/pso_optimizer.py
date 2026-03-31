@@ -1,70 +1,80 @@
-# src/optimisation/pso_optimizer.py
-
-import numpy as np
+from __future__ import annotations
 import torch
+from .non_gradient_base import NonGradientOptimiserBase
 
 
-def evaluate_fis(trainable_fis, X, y, point_n=25):
-    """计算 MSE（PSO 的 fitness）"""
-    trainable_fis.eval()
-    X_t = torch.tensor(X, dtype=torch.float32)
-    preds = trainable_fis(X_t, point_n=point_n).detach().numpy()
-    return np.mean((preds.reshape(-1) - y) ** 2)
+class PSOOptimizer(NonGradientOptimiserBase):
+    """
+    Minimal PSO strictly matching config:
+    pop_size, iters, w, c1, c2
+    """
 
+    def __init__(
+        self,
+        model,
+        loss_fn,
+        pop_size: int,
+        iters: int,
+        w: float,
+        c1: float,
+        c2: float,
+        device: str = "cpu",
+        **kwargs,
+    ):
+        super().__init__(model=model, loss_fn=loss_fn, device=device)
+        self.pop_size = int(pop_size)
+        self.iters = int(iters)
+        self.w = float(w)
+        self.c1 = float(c1)
+        self.c2 = float(c2)
 
-def train_with_pso(
-    trainable_fis,
-    X_train,
-    y_train,
-    epochs=30,
-    swarm_size=20,
-    point_n=25
-):
-   
-    dim = len(trainable_fis.flatten_params())
+    def optimise(self, X: torch.Tensor, y: torch.Tensor):
 
-    w = 0.7
-    c1 = c2 = 1.5
+        x0 = self._flatten_params()
+        dim = x0.numel()
 
-    swarm_pos = np.random.randn(swarm_size, dim) * 0.1
-    swarm_vel = np.zeros((swarm_size, dim))
-    pbest_pos = swarm_pos.copy()
-    pbest_val = np.full(swarm_size, np.inf)
+        pos = [x0 + 0.1 * torch.randn(dim) for _ in range(self.pop_size)]
+        vel = [torch.zeros(dim) for _ in range(self.pop_size)]
 
-    gbest_pos = None
-    gbest_val = np.inf
+        pbest = [p.clone() for p in pos]
+        pbest_val = [float("inf")] * self.pop_size
 
-    for epoch in range(epochs):
+        self._load_params(x0)
+        gbest = x0.clone()
+        gbest_val = self.evaluate(X, y)
+        best_state = self.snapshot()
 
-        for i in range(swarm_size):
-     
-            trainable_fis.assign_params(swarm_pos[i])
+        print_every = max(1, self.iters // 5)
 
-       
-            val = evaluate_fis(trainable_fis, X_train, y_train, point_n)
+        for it in range(1, self.iters + 1):
 
-            if val < pbest_val[i]:
-                pbest_val[i] = val
-                pbest_pos[i] = swarm_pos[i].copy()
+            # evaluate particles
+            for i in range(self.pop_size):
+                self._load_params(pos[i])
+                val = self.evaluate(X, y)
 
-            if val < gbest_val:
-                gbest_val = val
-            gbest_pos = pbest_pos[pbest_val.argmin()].copy()
+                if val < pbest_val[i]:
+                    pbest_val[i] = val
+                    pbest[i] = pos[i].clone()
 
-    
-        r1 = np.random.rand(swarm_size, dim)
-        r2 = np.random.rand(swarm_size, dim)
+                if val < gbest_val:
+                    gbest_val = val
+                    gbest = pos[i].clone()
+                    best_state = self.snapshot()
 
-        swarm_vel = (
-            w * swarm_vel
-            + c1 * r1 * (pbest_pos - swarm_pos)
-            + c2 * r2 * (gbest_pos - swarm_pos)
-        )
-        swarm_pos = swarm_pos + swarm_vel
+            # update velocity & position
+            for i in range(self.pop_size):
+                r1 = torch.rand(dim)
+                r2 = torch.rand(dim)
+                vel[i] = (
+                    self.w * vel[i]
+                    + self.c1 * r1 * (pbest[i] - pos[i])
+                    + self.c2 * r2 * (gbest - pos[i])
+                )
+                pos[i] = pos[i] + vel[i]
 
-        print(f"[PSO Epoch {epoch+1}/{epochs}] best_mse = {gbest_val:.6f}")
+            # -------- progress print --------
+            if it == 1 or it % print_every == 0 or it == self.iters:
+                print(f"[PSO] iter={it:03d}/{self.iters} best={gbest_val:.6f}")
 
- 
-    trainable_fis.assign_params(gbest_pos)
-
-    return trainable_fis
+        self.restore(best_state)

@@ -1,0 +1,640 @@
+\documentclass[a4paper,12pt,oneside]{article}
+
+% ===================== Packages =====================
+\usepackage{float}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{indentfirst}
+\setlength{\parindent}{1.5em}
+\usepackage{fancyhdr}
+\usepackage{minted}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage[left=1.2in,right=1.2in,top=1in,bottom=1.2in]{geometry}
+\usepackage{hyperref}
+\usepackage{adjustbox}
+
+
+% Optional subsubsubsection
+\newcommand{\subsubsubsection}[1]{\paragraph{#1}\mbox{}\\}
+
+% ===================================================
+\begin{document}
+
+% ===================== COVER PAGE =====================
+\begin{center}
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.7\textwidth]{nottingham logo.png}
+    \end{figure}
+    \vspace{1cm}
+    
+    \textbf{\large COMP3003 Undergraduate Final Report}\\[1.5cm]
+    \textbf{\Huge A Comparative Study of Gradient and Non-Gradient Optimisation Methods for Fuzzy Systems}\\[1cm]
+
+    \textbf{Supervisor}: Chao Chen\\[1cm]
+    
+    \vspace{3cm}
+    \textbf{Author}\\
+    Xingqi Hou (20516643 / scyxh6)\\[1cm]
+    
+    \vspace{3cm}
+    Submitted on \today \\[1cm]
+    School of Computer Science\\
+    University of Nottingham
+\end{center}
+
+\newpage
+
+% ===================== ABSTRACT =====================
+\begin{abstract}
+Optimisation plays a central role in the design of fuzzy inference systems, yet there is limited consensus on how different optimisation strategies compare under controlled experimental conditions. This project presents a systematic comparative study of gradient-based and non-gradient optimisation methods for Mamdani-type fuzzy inference systems within a unified experimental framework. 
+
+A range of representative optimisation algorithms, including SGD, RMSprop, Adam, genetic algorithms, particle swarm optimisation, differential evolution, and CMA-ES, are evaluated on 20 benchmark regression datasets using consistent initialisation, hyperparameter selection, and evaluation protocols. Performance is assessed in terms of predictive accuracy, robustness across datasets, and computational efficiency.
+
+The results demonstrate that gradient-based methods, particularly Adam, consistently outperform non-gradient alternatives in both accuracy and stability when applied to fully differentiable fuzzy systems with continuous parameters. Non-gradient methods remain competitive in limited scenarios but exhibit higher variance and stronger sensitivity to hyperparameter configuration. 
+
+Based on these findings, the study provides practical guidelines for selecting optimisation strategies and supports the use of data-driven initialisation followed by gradient-based optimisation as an effective default approach for fuzzy inference systems.
+\end{abstract}
+
+
+\newpage
+
+% ===================== TABLE OF CONTENTS =====================
+\tableofcontents
+\newpage
+
+% ============================================================
+% ===================== FINAL REPORT ==========================
+% ============================================================
+
+\section{Introduction}
+
+Fuzzy inference systems (FIS) constitute an important class of interpretable machine learning models and have been widely applied in prediction, control, decision support, and data-driven modelling. Their rule-based structure and linguistic representation make them particularly attractive in domains where transparency, explainability, and human interpretability are essential. Despite these advantages, the predictive performance of a fuzzy system is strongly dependent on how effectively its parameters are designed and optimised.
+
+In practice, the parameters of a fuzzy inference system---including membership function shapes, rule-base parameters, and inference operators---are rarely optimal when specified manually. As a result, optimisation plays a central role in modern fuzzy-system design. Over the past decades, a wide range of optimisation strategies have been proposed, spanning gradient-based learning, evolutionary algorithms, swarm intelligence, and other non-gradient search methods. These approaches differ substantially in terms of convergence behaviour, computational efficiency, robustness, and sensitivity to initialisation.
+
+Although many optimisation methods have demonstrated promising results in isolation, there remains limited consensus on how these methods compare under controlled and consistent experimental conditions. In particular, it is still unclear when gradient-based optimisation should be preferred over non-gradient alternatives, how strongly optimisation performance depends on initialisation strategies, and how sensitive different methods are to hyperparameter configuration. Addressing these questions is essential for developing practical, evidence-based guidelines for fuzzy-system optimisation.
+
+\subsection{Problem Definition}
+
+Despite the extensive literature on fuzzy-system optimisation, existing studies rarely provide systematic comparisons of established optimisation methods under a unified experimental framework. Most prior work focuses on proposing novel optimisation algorithms or hybrid techniques, often evaluated on different datasets, architectures, and experimental protocols. This diversity of experimental settings makes it difficult to draw general conclusions about the relative strengths and weaknesses of commonly used optimisation approaches.
+
+As a result, several practical questions remain insufficiently answered:
+\begin{itemize}
+    \item Which optimisation methods provide consistently strong performance across a diverse set of regression tasks?
+    \item How sensitive are different optimisation methods to membership-function and rule-base initialisation?
+    \item To what extent do hyperparameter choices influence optimisation stability and final performance?
+\end{itemize}
+
+Without controlled comparative studies, practitioners are left with limited guidance when selecting optimisation strategies for fuzzy inference systems.
+
+\subsection{Motivation}
+
+The design of an effective fuzzy inference system involves multiple interdependent decisions, including the choice of optimisation method, the specification of hyperparameters, and the selection of appropriate initialisation strategies. These choices directly affect both predictive accuracy and training stability, yet are often made heuristically or based on limited empirical evidence.
+
+Recent advances in differentiable programming and automatic differentiation have renewed interest in gradient-based optimisation for fuzzy systems, offering improved computational efficiency and scalability. At the same time, non-gradient optimisation methods such as genetic algorithms and particle swarm optimisation remain popular due to their robustness and flexibility in non-convex search spaces. A systematic comparison of these approaches is therefore timely and necessary.
+
+The motivation of this project is to move beyond anecdotal comparisons and provide a structured, empirical analysis of optimisation behaviour in fuzzy inference systems. Rather than proposing new optimisation algorithms, the emphasis is placed on understanding how existing methods perform under controlled conditions and on deriving practical recommendations that can inform real-world fuzzy-system design.
+
+\subsection{Aim and Objectives}
+
+\textbf{Aim:}  
+To conduct a systematic comparative study of gradient-based and non-gradient optimisation methods for Mamdani-type fuzzy inference systems under controlled experimental conditions, and to derive practical guidelines for parameter initialisation and hyperparameter selection.
+
+\textbf{Objectives:}
+\begin{itemize}
+    \item Evaluate representative gradient-based and non-gradient optimisation methods within a unified experimental framework.
+    \item Analyse the impact of different initialisation strategies on optimisation stability and predictive performance.
+    \item Investigate the sensitivity of optimisation methods to key hyperparameter settings using automated hyperparameter optimisation.
+    \item Compare optimisation methods across a diverse set of benchmark regression datasets.
+    \item Derive evidence-based recommendations for selecting optimisation strategies and initialisation schemes in fuzzy inference systems.
+\end{itemize}
+\newpage
+
+\section{Related Work}
+
+Optimisation of fuzzy inference systems has been an active research topic for several decades, and a wide range of approaches have been proposed across different optimisation paradigms. Existing work can broadly be grouped into three categories: evolutionary and swarm-based optimisation, randomised and heuristic search methods, and gradient-based learning approaches. While each category has demonstrated success in specific settings, direct and systematic comparison between these methods remains limited.
+
+\subsection{Evolutionary and Swarm-Based Optimisation}
+
+A substantial body of research has focused on population-based optimisation techniques for tuning fuzzy inference systems, including genetic algorithms (GA), particle swarm optimisation (PSO), and differential evolution (DE). These methods are attractive because they do not require gradient information and can explore complex, non-convex parameter spaces. They are therefore well suited to fuzzy systems with non-differentiable components or discrete design choices.
+
+Numerous studies have reported competitive performance using evolutionary and swarm-based methods, often highlighting their robustness to local minima and flexibility in handling constraints. However, these methods typically incur high computational cost due to repeated evaluation of candidate solutions. Moreover, their performance is often sensitive to population size, mutation or exploration parameters, and initialisation strategies.
+
+Recent work such as the Stochastic Configuration-based Fuzzy Inference System (SCFS-IFR) proposed by Zhou et al.~\cite{zhou2023stochastic} demonstrates the effectiveness of intelligent search strategies combined with interpretable fuzzy rules. While such systems achieve strong empirical performance, they are usually evaluated under bespoke experimental settings and with limited comparison to alternative optimisation paradigms. As a result, it remains unclear how evolutionary and swarm-based methods compare to gradient-based approaches when applied to the same fuzzy-system architecture under controlled conditions.
+
+\subsection{Randomised and Heuristic Search Methods}
+
+In addition to population-based algorithms, various randomised and heuristic optimisation techniques have been explored for fuzzy-system training. These methods include stochastic configuration, random sampling of parameters, and heuristic adjustment of membership functions based on data statistics. Their primary appeal lies in their simplicity, interpretability, and reduced reliance on complex optimisation machinery.
+
+Although heuristic methods can provide reasonable initial solutions and sometimes competitive performance, they generally lack strong convergence guarantees and can be highly sensitive to initial parameter choices. Furthermore, their evaluation is often limited to specific datasets or problem domains, making it difficult to assess their general effectiveness across diverse tasks.
+
+As with evolutionary methods, existing studies on heuristic optimisation rarely adopt a unified experimental protocol that enables fair comparison with gradient-based learning or more advanced population-based approaches.
+
+\subsection{Gradient-Based Optimisation}
+
+Gradient-based optimisation of fuzzy inference systems has gained increasing attention in recent years, driven by advances in differentiable programming and automatic differentiation frameworks. By reformulating fuzzy operators in smooth and differentiable forms, it becomes possible to apply standard optimisation algorithms such as stochastic gradient descent (SGD) and Adam.
+
+Chen et al.~\cite{chen2024gradient} demonstrate that Mamdani-type fuzzy systems can be trained efficiently using gradient-based methods when implemented within modern deep learning frameworks. These approaches offer clear advantages in terms of computational efficiency and scalability, particularly for large datasets or repeated training runs. However, concerns remain regarding optimisation stability, sensitivity to initialisation, and the risk of violating semantic or domain constraints on membership functions.
+
+A significant recent contribution in this area is the Constraints Always Satisfied Parameters (CASPs) framework proposed by Chen, Mendel, and Garibaldi~\cite{chen2025casp}. CASPs introduce a principled reparameterisation strategy that guarantees the satisfaction of semantic and domain constraints during optimisation. The framework includes multiple variants with different trade-offs between flexibility and interpretability, providing an important foundation for studying the interaction between optimisation methods and membership-function initialisation.
+
+Despite these advances, gradient-based approaches have not yet been systematically compared with non-gradient methods across a broad range of datasets using a unified experimental framework.
+
+\subsection{Gaps in Existing Literature}
+
+Although a wide variety of optimisation methods for fuzzy inference systems have been proposed, several key limitations can be identified in the existing literature:
+\begin{itemize}
+    \item Most studies focus on introducing new optimisation algorithms rather than comparing established methods under identical experimental conditions.
+    \item Experimental protocols, datasets, and evaluation metrics vary widely across studies, hindering meaningful comparison of results.
+    \item The impact of membership-function initialisation and hyperparameter configuration is often underexplored or treated heuristically.
+    \item Few works provide clear, practical guidelines on when to prefer gradient-based optimisation over non-gradient alternatives, or vice versa.
+\end{itemize}
+
+These gaps motivate the need for a controlled and systematic comparative study. By evaluating multiple optimisation methods within a unified experimental framework and across a diverse set of benchmark datasets, this project aims to provide empirical evidence and practical recommendations for optimisation choice in fuzzy inference systems.
+
+\newpage
+\section{Methodology}
+
+This section describes the methodological foundation of the study. The objective is to establish a unified and controlled experimental framework in which gradient-based and non-gradient optimisation methods can be systematically compared for fuzzy inference systems. The methodology consists of five core components: fuzzy system formulation, optimisation framework, parameter initialisation strategies, hyperparameter considerations, and overall experimental design.
+
+\subsection{Fuzzy Inference System Formulation}
+
+The study focuses on Mamdani-type fuzzy inference systems, chosen for their interpretability and widespread use in regression and decision-support tasks. Each system consists of:
+\begin{itemize}
+    \item a set of input variables with associated membership functions,
+    \item a rule base composed of fuzzy if--then rules,
+    \item an inference mechanism based on fuzzy logic operators,
+    \item a defuzzification operator producing crisp outputs.
+\end{itemize}
+
+Given an input vector $\mathbf{x} \in \mathbb{R}^d$, the fuzzy inference system produces a crisp output $\hat{y}$ through the processes of fuzzification, rule evaluation, aggregation, and defuzzification.
+
+All membership-function parameters are treated as trainable variables. Let $\theta$ denote the complete set of tunable parameters. The optimisation objective is defined as the mean squared error (MSE):
+\[
+    \mathcal{L}(\theta)
+    = \frac{1}{N} \sum_{i=1}^{N}
+      \bigl( f_{\theta}(\mathbf{x}_i) - y_i \bigr)^2 ,
+\]
+where $f_{\theta}(\mathbf{x}_i)$ denotes the crisp output of the fuzzy inference system for input $\mathbf{x}_i$. This objective function is shared by all optimisation methods considered in the study.
+
+\subsection{Unified Optimisation Framework}
+
+A central methodological contribution of this work is the construction of a unified optimisation framework that allows different optimisation methods to operate on the same fuzzy system architecture. The framework ensures that:
+\begin{itemize}
+    \item all trainable parameters are exposed in a common vectorised representation,
+    \item a shared loss-evaluation routine computes the optimisation objective,
+    \item optimisation methods interact with the fuzzy system exclusively through this interface,
+    \item the fuzzy inference system remains independent of the specific optimiser used.
+\end{itemize}
+
+This abstraction enables direct comparison of optimisation behaviour by isolating the effect of the optimisation algorithm from architectural differences. The framework accommodates both gradient-based optimisation methods, which rely on automatic differentiation, and non-gradient methods, which evaluate candidate solutions through repeated loss computation.
+
+\subsection{Initialisation Strategies}
+
+Parameter initialisation plays a critical role in the stability and convergence of fuzzy-system optimisation. To study its impact, the methodology supports multiple initialisation strategies that differ in how membership functions and rule bases are constructed.
+
+The framework allows variation in:
+\begin{itemize}
+    \item the placement and parameterisation of membership functions,
+    \item the generation of initial rule structures using data-driven or heuristic approaches,
+    \item the number of membership functions and rules included in the system.
+\end{itemize}
+
+These initialisation strategies define one dimension of the experimental space and enable systematic analysis of how different starting conditions influence optimisation performance.
+
+\subsection{Hyperparameter Considerations}
+
+Optimisation performance is further influenced by hyperparameters governing the search process. The study therefore considers key hyperparameters associated with each optimisation method, including:
+\begin{itemize}
+    \item learning rates, batch sizes, and regularisation parameters for gradient-based methods,
+    \item population sizes, exploration coefficients, and mutation or crossover rates for non-gradient methods,
+    \item computational parameters such as defuzzification resolution and evaluation settings.
+\end{itemize}
+
+Hyperparameter optimisation is conducted in a controlled manner to ensure fair comparison between optimisation methods while avoiding test-set leakage. This allows performance differences to be attributed to the optimisation strategy rather than ad hoc parameter tuning.
+
+\subsection{Experimental Design}
+
+The experimental design follows a controlled protocol in which individual factors are varied systematically while others are held constant. This enables clear attribution of observed performance differences to:
+\begin{itemize}
+    \item the choice of optimisation method,
+    \item the selected initialisation strategy,
+    \item the hyperparameter configuration,
+    \item dataset characteristics.
+\end{itemize}
+
+All optimisation methods are evaluated on the same fuzzy system architecture, datasets, and evaluation metrics. Performance is assessed using test-set MSE, convergence behaviour, and training time, providing a comprehensive basis for comparison.
+
+\subsection{Summary}
+
+In summary, the methodology establishes a unified and controlled framework for comparing gradient-based and non-gradient optimisation methods for fuzzy inference systems. By maintaining consistency across system architecture, datasets, and evaluation protocols, the study enables meaningful analysis of optimisation behaviour and supports the derivation of practical, evidence-based recommendations.
+
+\newpage
+\section{System Design and Implementation}
+
+This section describes the design and implementation of the unified experimental framework developed in this project. The objective of the framework is to support systematic and reproducible comparison of gradient-based and non-gradient optimisation methods under controlled conditions. The design emphasises modularity, extensibility, and separation of concerns, ensuring that optimisation behaviour---rather than implementation details---is the primary factor under comparison.
+
+\subsection{Overall System Architecture}
+
+The overall framework is organised into a set of modular components, each responsible for a distinct stage of the optimisation workflow. The main architectural components include:
+\begin{itemize}
+    \item a dataset module for loading, preprocessing, and splitting benchmark datasets,
+    \item an initialisation module for constructing fuzzy systems with configurable membership functions and rule bases,
+    \item a vectorised fuzzy inference engine for efficient model evaluation,
+    \item a trainable parameter interface exposing all optimisable parameters in a unified representation,
+    \item an optimisation layer containing interchangeable optimisation algorithms,
+    \item an experimental pipeline for coordinating experiments and recording results.
+\end{itemize}
+
+This modular architecture ensures that individual components can be modified or extended independently, allowing new optimisation methods or initialisation strategies to be incorporated without changes to the core system.
+
+\subsection{Vectorised Mamdani Inference Engine}
+
+At the core of the framework is a Mamdani-type fuzzy inference engine implemented using vectorised tensor operations. The engine performs fuzzification, rule evaluation, aggregation, and defuzzification in a fully batch-based manner, enabling efficient evaluation of large datasets during optimisation.
+
+All fuzzy operations are implemented using a numerical backend that supports automatic differentiation. This design allows the same inference engine to be used by both gradient-based and non-gradient optimisation methods, ensuring consistency of model behaviour across optimisation strategies.
+
+\subsection{TrainableFIS Interface}
+
+To unify interaction between the fuzzy inference engine and optimisation algorithms, the fuzzy model is wrapped in a \texttt{TrainableFIS} interface. This interface exposes all membership-function parameters as a single, flat parameter vector while maintaining a structured internal representation.
+
+For gradient-based optimisation, parameters are represented as trainable variables compatible with automatic differentiation. For non-gradient optimisation, the interface provides methods to extract and assign parameter vectors, allowing population-based or stochastic optimisers to operate on the same parameter space.
+
+This design decouples optimisation logic from fuzzy-system implementation, enabling fair comparison between optimisation methods.
+
+\subsection{Optimisation Layer}
+
+The optimisation layer consists of a collection of interchangeable optimisation modules, each implementing a specific optimisation strategy. All optimisers interact with the fuzzy system exclusively through the \texttt{TrainableFIS} interface and a shared loss-evaluation routine.
+
+Gradient-based optimisers update parameters using analytical gradients, while non-gradient optimisers evaluate candidate solutions through repeated loss computation. By enforcing a common interface and evaluation protocol, the framework ensures that differences in performance arise from optimisation behaviour rather than implementation inconsistencies.
+
+\subsection{Configuration-Driven Experimental Pipeline}
+
+The framework includes a configuration-driven experimental pipeline that orchestrates dataset selection, model construction, optimisation, and evaluation. Experimental settings---including initialisation strategies, optimiser choice, and hyperparameters---are specified through configuration files, enabling reproducible and automated experimentation.
+
+The pipeline iterates over datasets and experimental conditions, executes optimisation runs, and records performance metrics such as test error and training time in structured output files. This design supports large-scale comparative studies while minimising manual intervention and potential sources of bias.
+
+\subsection{Summary}
+
+In summary, the system design and implementation provide a unified and extensible platform for studying optimisation behaviour in fuzzy inference systems. By separating fuzzy-system modelling from optimisation logic and enforcing consistent evaluation protocols, the framework enables meaningful and reproducible comparison of gradient-based and non-gradient optimisation methods.
+The full source code and experimental framework developed for this project are publicly available at:
+\url{https://github.com/Tomato-2004/fuzzy-gradient-optimisation}.
+
+\newpage
+\section{Experimental Setup}
+
+This section describes the experimental setup used to evaluate and compare optimisation methods for fuzzy inference systems. The objective is to ensure a fair, controlled, and reproducible comparison across optimisation strategies, initialisation methods, and datasets. All experiments are conducted within the unified framework described in the previous sections.
+
+\subsection{Benchmark Datasets}
+
+The experimental evaluation is conducted on a suite of 20 benchmark regression datasets commonly used in the fuzzy-system literature. These datasets span a range of problem sizes, input dimensionalities, and levels of complexity, providing a diverse basis for comparative analysis.
+
+All datasets are publicly available and were selected to enable comparison with prior work, including studies based on stochastic configuration fuzzy systems. Each dataset is treated independently, and no dataset-specific tuning is performed beyond the standardised preprocessing steps described below.
+
+\subsection{Preprocessing and Data Splits}
+
+To ensure consistency and reproducibility, all datasets are processed using a unified preprocessing pipeline. The pipeline includes:
+\begin{itemize}
+    \item conversion of raw data into a numerical tabular format,
+    \item handling of missing values through simple statistical imputation,
+    \item Min--Max normalisation of input and output variables to the $[0,1]$ range.
+\end{itemize}
+
+For each dataset, a fixed train--test split is used across all experiments. In addition, when hyperparameter optimisation is performed, the training set is further divided into training and validation subsets. The test set is used exclusively for final performance evaluation and is never accessed during model selection or hyperparameter optimisation.
+
+\subsection{Optimisation Methods}
+
+The study compares a range of representative optimisation methods drawn from both gradient-based and non-gradient paradigms.
+
+\paragraph{Gradient-based methods.}
+The gradient-based optimisers considered include stochastic gradient descent (SGD), RMSprop, and Adam. These methods update fuzzy-system parameters using analytical gradients obtained through automatic differentiation.
+
+\paragraph{Non-gradient methods.}
+The non-gradient optimisation methods include genetic algorithms (GA), particle swarm optimisation (PSO), differential evolution (DE), and covariance matrix adaptation evolution strategy (CMA-ES). These methods operate directly on the flattened parameter vector and rely solely on loss evaluations without gradient information.
+
+All optimisation methods operate on the same fuzzy-system architecture and parameter representation, ensuring that performance differences arise from optimisation behaviour rather than model structure.
+
+\subsection{Initialisation Configurations}
+
+Multiple initialisation strategies are evaluated to study their impact on optimisation behaviour. These strategies differ in how membership functions and rule bases are constructed prior to optimisation, including both heuristic and data-driven approaches.
+
+Initialisation settings are applied consistently across optimisation methods, and no optimiser-specific initialisation is used unless explicitly stated. This allows the interaction between optimisation method and initialisation strategy to be analysed systematically.
+
+\subsection{Hyperparameter Optimisation Protocol}
+
+Hyperparameter optimisation is performed using a Successive Halving (SH) strategy. For each optimisation method, a predefined search space of hyperparameters is explored on a subset of representative datasets. Candidate configurations are evaluated using validation-set performance, and computational resources are progressively allocated to the most promising candidates.
+
+Importantly, validation performance is used exclusively for hyperparameter selection, while test data are reserved for final evaluation. This protocol avoids test-set leakage and ensures that reported results reflect genuine generalisation performance.
+
+The best-performing hyperparameter configuration for each optimisation method is then fixed and applied uniformly across all benchmark datasets during final evaluation.
+
+\subsection{Evaluation Metrics}
+
+Model performance is primarily assessed using mean squared error (MSE) on the test set. To account for stochastic variation, each experiment is repeated with multiple random seeds, and results are aggregated using robust statistics.
+
+In addition to predictive accuracy, training time is recorded to assess computational efficiency. This enables analysis of trade-offs between optimisation accuracy and computational cost across methods.
+
+\subsection{Experimental Reproducibility}
+
+To ensure reproducibility, all experiments are conducted using fixed random seeds, standardised data splits, and configuration-driven execution. Experimental results are recorded in structured output files, enabling downstream statistical analysis and visualisation.
+
+\subsection{Summary}
+
+In summary, the experimental setup provides a controlled environment for evaluating optimisation methods for fuzzy inference systems. By standardising datasets, preprocessing, model architecture, and evaluation protocols, the study enables meaningful comparison of gradient-based and non-gradient optimisation strategies and supports robust empirical conclusions.
+
+\newpage
+\section{Results}
+
+This section presents the empirical results of the comparative study. All results are obtained using the experimental setup described in the previous section and are based on final test-set evaluation with optimiser-specific hyperparameters selected via Successive Halving. Performance is assessed in terms of predictive accuracy and computational efficiency. Unless otherwise stated, all reported statistics are aggregated over all benchmark datasets and random seeds.
+
+\subsection{Overall Performance Comparison}
+
+Table~\ref{tab:overall_results} summarises the overall performance of each optimisation method across all benchmark datasets. Results are reported as the mean and standard deviation of test-set mean squared error (MSE), aggregated over all datasets and random seeds. Average training time is also reported to provide an indication of computational cost.
+
+\begin{table}[H]
+\centering
+\caption{Overall performance across all datasets. Results are reported as mean $\pm$ standard deviation of test MSE, averaged over datasets and random seeds.}
+\label{tab:overall_results}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Optimiser} & \textbf{Mean Test MSE} & \textbf{Std.} & \textbf{Mean Time (s)} \\
+\midrule
+Adam      & 0.0100 & 0.0102 & 18.18 \\
+RMSprop   & 0.0410 & 0.0177 & 28.60 \\
+SGD       & 0.0412 & 0.0170 & 27.49 \\
+GA        & 0.0427 & 0.0360 & 40.83 \\
+PSO       & 0.0575 & 0.0816 & 18.01 \\
+DE        & 0.0745 & 0.0924 & 15.71 \\
+CMA-ES    & 0.1952 & 0.1872 & 5.34 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Across all datasets, gradient-based optimisation methods achieve substantially lower test errors than non-gradient alternatives. Among all methods considered, Adam attains the lowest average test MSE with relatively low variance, indicating both strong predictive accuracy and stable generalisation behaviour under the unified experimental protocol. Non-gradient methods exhibit higher average error and greater variability, suggesting reduced robustness across heterogeneous regression tasks.
+
+\subsection{Gradient vs Non-Gradient Optimisation}
+
+To assess robustness across datasets, optimisation methods are further compared using per-dataset median test MSE. Two complementary statistics are considered: win counts and average ranks.
+
+Table~\ref{tab:win_counts} reports the number of datasets on which each optimiser achieves the lowest median test MSE.
+
+\begin{table}[H]
+\centering
+\caption{Win counts based on per-dataset median test MSE.}
+\label{tab:win_counts}
+\begin{tabular}{lc}
+\toprule
+\textbf{Optimiser} & \textbf{Number of Wins} \\
+\midrule
+Adam      & 18 \\
+PSO       & 2  \\
+SGD       & 0  \\
+RMSprop   & 0  \\
+GA        & 0  \\
+DE        & 0  \\
+CMA-ES    & 0  \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+In addition, Table~\ref{tab:average_rank} reports the average rank of each optimiser. Ranks are computed by ordering optimisers within each dataset based on median test MSE and then averaging across all datasets.
+
+\begin{table}[H]
+\centering
+\caption{Average rank of optimisation methods across datasets (lower is better).}
+\label{tab:average_rank}
+\begin{tabular}{lc}
+\toprule
+\textbf{Optimiser} & \textbf{Average Rank} \\
+\midrule
+Adam      & 1.05 \\
+PSO       & 2.00 \\
+DE        & 3.95 \\
+GA        & 4.15 \\
+RMSprop   & 4.55 \\
+SGD       & 4.80 \\
+CMA-ES    & 6.50 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Both metrics indicate a clear and consistent advantage for gradient-based optimisation. Adam achieves the highest number of wins and the lowest average rank across datasets, demonstrating not only strong average performance but also exceptional robustness. Non-gradient methods occasionally perform well on individual datasets, but their overall ranking and win counts indicate reduced consistency.
+
+\subsection{Training Time and Efficiency}
+
+In addition to predictive accuracy, computational efficiency is an important practical consideration. Table~\ref{tab:time_accuracy} summarises the trade-off between test MSE and training time for each optimisation method.
+
+\begin{table}[H]
+\centering
+\caption{Time--accuracy trade-off across optimisation methods.}
+\label{tab:time_accuracy}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Optimiser} & \textbf{Mean Test MSE} & \textbf{Mean Time (s)} \\
+\midrule
+Adam      & 0.0100 & 18.18 \\
+RMSprop   & 0.0410 & 28.60 \\
+SGD       & 0.0412 & 27.49 \\
+GA        & 0.0427 & 40.83 \\
+PSO       & 0.0575 & 18.01 \\
+DE        & 0.0745 & 15.71 \\
+CMA-ES    & 0.1952 & 5.34  \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Gradient-based methods achieve favourable trade-offs between predictive accuracy and computational cost. In particular, Adam provides the best overall accuracy while maintaining moderate training time. Although some non-gradient methods offer faster optimisation, this speed advantage is typically accompanied by a substantial loss in predictive performance.
+
+\subsection{Initialisation Setting and Sensitivity}
+
+All optimisation methods are evaluated under a consistent initialisation strategy to avoid confounding effects arising from. Membership functions and rule bases are initialised using the same data-driven procedure across all experiments, and no optimiser-specific initialisation is applied.
+
+Under this controlled setting, gradient-based methods exhibit relatively stable performance across datasets and random seeds, suggesting limited sensitivity to the specific initial parameter configuration. In contrast, non-gradient population-based methods show greater variability in test performance, indicating stronger dependence on initial conditions and hyperparameter configuration. A detailed per-dataset performance breakdown is provided in Appendix~A.
+
+\subsection{Membership Function Structure Analysis}
+
+To complement the quantitative evaluation, a qualitative analysis of the learned membership functions (MFs) was conducted to examine how different optimisation paradigms influence the internal structure of fuzzy inference systems.
+
+Figure~\ref{fig:mf_comparison} presents a representative comparison of membership functions for selected input variables from the same dataset. The top row shows the initial fuzzy system before optimisation, the middle row shows the system optimised using the gradient-based Adam optimiser, and the bottom row shows the system optimised using Particle Swarm Optimisation (PSO). All models share the same architecture, initialisation strategy, and hyperparameter configuration.
+
+After optimisation, the gradient-based method adjusts membership functions in a smooth and structured manner, preserving the overall ordering and coverage of the input domain. In contrast, the non-gradient method produces more irregular membership-function shapes, including sharply peaked or sparsely active functions. These visualisations are intended as qualitative illustrations of typical optimisation behaviour rather than statistical summaries. Quantitative conclusions in this study are derived exclusively from aggregated results across multiple datasets and random seeds.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{MF.png}
+    \caption{Comparison of membership functions for selected input variables before optimisation (top), after gradient-based optimisation using Adam (middle), and after non-gradient optimisation using PSO (bottom).}
+    \label{fig:mf_comparison}
+\end{figure}
+
+
+\subsection{Optimiser-Specific Hyperparameter Configuration}
+
+To maintain a fair and controlled comparison between optimisation methods, optimiser-specific hyperparameters are selected using a unified Successive Halving (SH) procedure prior to final evaluation. For each optimiser, candidate configurations are evaluated on a representative subset of datasets using validation performance, and the best-performing configuration is fixed and applied consistently across all benchmark datasets.
+
+Table~\ref{tab:best_configs} summarises the initialisation strategy and the corresponding hyperparameter configuration selected for each optimisation method. All experiments use the same data-driven initialisation strategy to ensure that observed performance differences are attributable to optimisation behaviour rather than initialisation bias.
+
+\begin{table}[H]
+\centering
+\caption{Initialisation strategy and best hyperparameter configuration selected for each optimisation method via Successive Halving.}
+\label{tab:best_configs}
+
+\begin{adjustbox}{max width=\textwidth,center}
+\begin{tabular}{llll}
+\toprule
+\textbf{Optimiser} & \textbf{Initialisation} & \textbf{Key Hyperparameters} & \textbf{Remarks} \\
+\midrule
+Adam 
+& kmeans\_mf 
+& lr=$3\times10^{-3}$, batch=64, weight\_decay=$10^{-6}$ 
+& Stable and consistent \\
+
+SGD 
+& kmeans\_mf 
+& lr=$1\times10^{-2}$, momentum=0.9, batch=64 
+& Sensitive to learning rate \\
+
+RMSprop 
+& kmeans\_mf 
+& lr=$10^{-3}$, $\alpha$=0.9, batch=64 
+& Slower convergence \\
+
+PSO 
+& kmeans\_mf 
+& swarm\_size=40 
+& Competitive on few datasets \\
+
+GA 
+& kmeans\_mf 
+& pop\_size=50, mutation=0.1, crossover=0.8 
+& High variance \\
+
+DE 
+& kmeans\_mf 
+& F=0.5, CR=0.9 
+& Fast but unstable \\
+
+CMA-ES 
+& kmeans\_mf 
+& $\sigma_{\text{init}}$=0.1, population=10 
+& Poor generalisation \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+
+\end{table}
+
+
+These configurations are used for all final evaluations reported in this section. 
+
+
+
+\newpage
+\section{Discussion}
+
+This section provides an interpretation of the empirical results and discusses their implications for the optimisation of fuzzy inference systems. The discussion focuses on explaining the observed performance differences between optimisation paradigms, identifying scenarios in which different methods are appropriate, and deriving practical guidelines for system design and optimisation.
+
+\subsection{Why Do Gradient Methods Perform Better?}
+
+Across all benchmark datasets, gradient-based optimisation methods consistently outperform non-gradient alternatives in terms of predictive accuracy and robustness. This behaviour can be attributed to several interacting factors.
+
+First, gradient-based methods exploit local sensitivity information through analytical gradients, enabling efficient and directed optimisation in high-dimensional parameter spaces. In the context of fuzzy inference systems with continuous membership-function parameters, this allows small but meaningful parameter updates that steadily reduce the optimisation objective. This contrasts with population-based methods, which rely on stochastic exploration without explicit guidance from gradient information.
+
+Second, the vectorised and fully differentiable implementation of the fuzzy inference engine produces relatively smooth loss surfaces. Optimisers such as Adam are well suited to this setting, as they adapt learning rates dynamically and stabilise convergence across parameters with different scales. This is reflected in the low variance and consistently strong performance observed across datasets and random seeds.
+
+In contrast, non-gradient methods such as GA, DE, and CMA-ES require substantially more evaluations to achieve comparable refinement of continuous parameters. Under equal or comparable computational budgets, this leads to slower convergence and greater variability. While these methods are robust to local minima in principle, the experimental results indicate that such robustness does not compensate for the lack of gradient information in the differentiable fuzzy systems examined in this study.
+
+\subsection{When Are Non-Gradient Methods Still Competitive?}
+
+Although gradient-based methods dominate overall performance, non-gradient optimisation methods remain competitive in specific scenarios. In particular, Particle Swarm Optimisation (PSO) achieves strong performance on a small subset of datasets, as reflected in the per-dataset win counts and average ranks.
+
+Non-gradient methods may be advantageous when gradient information is unavailable, unreliable, or when the fuzzy system incorporates non-differentiable components, discrete rule structures, or hard constraints that are difficult to encode in a differentiable form. They can also be useful during early-stage exploration, where broad coverage of the parameter space is preferred over fine-grained optimisation.
+
+However, the results of this study suggest that such advantages are highly context-dependent. For smooth, fully differentiable Mamdani-type fuzzy inference systems with continuous parameters, non-gradient methods generally fail to match the accuracy, stability, and efficiency of gradient-based optimisation when both are provided with carefully selected hyperparameters and comparable computational resources.
+
+\subsection{Practical Guidelines for Optimising Fuzzy Systems}
+
+Based on the empirical findings, several practical guidelines for optimisation of fuzzy inference systems can be derived.
+
+For differentiable Mamdani-type fuzzy systems with continuous membership-function parameters, gradient-based optimisation should be the default choice. Among the methods evaluated, Adam provides the most favourable balance between predictive accuracy, robustness, and computational efficiency. Moderate learning rates and batch sizes yield stable convergence without excessive sensitivity to hyperparameter settings.
+
+Non-gradient optimisation methods should be considered primarily when gradient-based training is infeasible, such as in systems with discrete design variables or non-differentiable operators. In such cases, population-based methods like PSO offer a reasonable trade-off between exploration and performance, although careful hyperparameter tuning remains essential.
+
+With respect to initialisation, the results indicate that data-driven initialisation strategies provide a reliable foundation for optimisation. Under consistent initialisation, gradient-based methods demonstrate limited sensitivity to initial parameter configurations, whereas non-gradient methods exhibit greater variability. This highlights the importance of robust initialisation when employing population-based optimisation.
+
+Overall, the findings support a two-stage optimisation strategy in practice: data-driven initialisation followed by gradient-based fine-tuning, with non-gradient methods reserved for specialised scenarios where gradient information is unavailable or unsuitable.
+
+\subsection{Limitations of the Study}
+
+Several limitations of this study should be acknowledged. First, the experiments focus exclusively on Mamdani-type fuzzy inference systems with differentiable components. The conclusions may not directly generalise to other fuzzy-system architectures or to systems incorporating discrete or symbolic elements.
+
+Second, hyperparameter optimisation is performed using a fixed Successive Halving protocol on a representative subset of datasets. While this ensures fairness and avoids test-set leakage, alternative hyperparameter optimisation strategies or larger search spaces may yield different optimal configurations.
+
+Finally, the qualitative analysis of membership-function structures is illustrative rather than exhaustive. Although it provides insight into optimisation behaviour, a more systematic analysis of interpretability metrics could further strengthen the conclusions.
+
+Despite these limitations, the study provides a controlled and comprehensive comparison of optimisation methods and offers practical guidance grounded in empirical evidence.
+
+\newpage
+\section{Conclusion}
+
+This project presented a systematic comparative study of gradient-based and non-gradient optimisation methods for fuzzy inference systems under a unified experimental framework. By controlling for system architecture, initialisation strategy, and evaluation protocol, the study enabled meaningful comparison of optimisation behaviour across a diverse set of benchmark regression datasets.
+
+The experimental results demonstrate that gradient-based optimisation methods, particularly Adam, consistently outperform non-gradient alternatives in terms of predictive accuracy, robustness, and overall efficiency. Non-gradient methods remain competitive in limited scenarios but exhibit greater variability and stronger sensitivity to hyperparameter configuration.
+
+In addition to quantitative evaluation, qualitative analysis of learned membership functions reveals structural differences induced by optimisation paradigms. Gradient-based optimisation tends to produce smoother and more regular fuzzy representations, whereas non-gradient methods often result in more irregular and uneven membership-function structures.
+
+Overall, the findings support the use of data-driven initialisation followed by gradient-based optimisation as a practical and effective strategy for training fuzzy inference systems. Future work may extend this framework to alternative fuzzy-system architectures, investigate constraint-aware optimisation techniques, or explore hybrid strategies that combine the strengths of gradient-based and non-gradient methods.
+
+
+\newpage
+\section{Legal, Social, Ethical and Professional Considerations (LSEPI)}
+
+Although this project does not involve human participants, personal data, or sensitive information, several broader legal, ethical, and professional considerations remain relevant and are addressed below.
+
+\begin{itemize}
+    \item \textbf{Data Protection and GDPR:}  
+    All datasets used are publicly available regression benchmarks that contain no personally identifiable information. The project uses transparent and reproducible data-handling procedures, including consistent preprocessing and fixed train--test splits.
+
+    \item \textbf{Intellectual Property and Licensing:}  
+    All code produced within the project is original work. The modular software architecture has been designed to allow potential open-source release under an appropriate licence, supporting transparency and community reuse.
+
+    \item \textbf{Ethical and Professional Software Practice:}  
+    The framework emphasises reproducibility, configurability, and traceability of experiments. These design choices align with responsible research methodology and help ensure that results can be validated and extended by other researchers.
+
+    \item \textbf{Social and Environmental Responsibility:}  
+    By comparing optimisation methods under controlled conditions, the project aims to provide guidance that may reduce unnecessary computational cost in future fuzzy-system development, contributing to more sustainable use of computing resources by discouraging unnecessarily expensive optimisation strategies.
+\end{itemize}
+
+Overall, even though the project does not raise direct human-related ethical concerns, it has been conducted with attention to legal, social, ethical, and professional responsibilities relevant to modern computational research.
+
+
+\newpage
+\section{References}
+\begin{thebibliography}{9}
+
+
+\bibitem{chen2024gradient}
+Chen, C., Wagner, C., \& Garibaldi, J. M. (2024). 
+Gradient-based Fuzzy System Optimisation via Automatic Differentiation - FuzzyR as a Use Case.
+
+\bibitem{zhou2023stochastic}
+Zhou, W., Li, H., \& Bao, M. (2023). 
+Stochastic Configuration Based Fuzzy Inference System with Interpretable Fuzzy Rules and Intelligent Search Process. 
+\textit{Mathematics, 11}(3). 
+\href{https://doi.org/10.3390/math11030614}{https://doi.org/10.3390/math11030614}
+
+\bibitem{chen2025casp}
+Chen, C., Mendel, J. M., \& Garibaldi, J. M. (2025).
+\textit{Constraints Always Satisfied Parameters (CASPs) for Fuzzy Sets Optimisation}. 
+IEEE Transactions on Fuzzy Systems (in press).
+Available at: \href{https://arxiv.org/abs/2403.17148}{https://arxiv.org/abs/2403.17148}.
+
+\end{thebibliography}
+
+\end{document}

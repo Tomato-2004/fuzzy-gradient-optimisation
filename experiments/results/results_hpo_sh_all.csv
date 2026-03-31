@@ -1,8 +1,0 @@
-optimiser,initialisation,hyperparams,median_mse
-adam,kmeans_mf,"{'lr': 0.01, 'batch_size': 128, 'weight_decay': 0.0}",0.013609184965217411
-sgd,kmeans_mf,"{'lr': 0.001, 'momentum': 0.0, 'batch_size': 32, 'weight_decay': 1e-06}",0.03978853378877312
-rmsprop,kmeans_mf,"{'lr': 0.0001, 'alpha': 0.9, 'batch_size': 32, 'weight_decay': 1e-06}",0.03654723455906771
-pso,kmeans_mf,{'swarm_size': 60},0.030098614926081745
-ga,kmeans_mf,"{'pop_size': 80, 'mutation_rate': 0.2, 'crossover_rate': 0.8}",0.03301679377529518
-de,kmeans_mf,"{'F': 0.3, 'CR': 0.9}",0.030145467538630084
-cmaes,kmeans_mf,"{'sigma_init': 0.2, 'population': 10}",0.15642603003855451

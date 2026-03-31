@@ -1,0 +1,6 @@
+"language","dataset","seed","samples","repeats","trial","total_seconds","mean_ms"
+"r","laser",0,794,100,1,389.7,3897
+"r","laser",0,794,100,2,387.57,3875.7
+"r","laser",0,794,100,3,384.94,3849.4
+"r","laser",0,794,100,4,389.84,3898.4
+"r","laser",0,794,100,5,388.33,3883.3

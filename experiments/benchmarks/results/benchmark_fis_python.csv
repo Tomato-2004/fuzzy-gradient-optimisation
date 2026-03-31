@@ -1,0 +1,2 @@
+language,dataset,seed,samples,repeats,total_seconds,mean_ms
+python,laser,0,794,100,9.190813600085676,91.90813600085676

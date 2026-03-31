@@ -1,70 +1,82 @@
-# src/optimisation/de_optimizer.py
-
-import numpy as np
+from __future__ import annotations
 import torch
+from .non_gradient_base import NonGradientOptimiserBase
 
 
-# ========== Fitness ==========
-def evaluate_fis(trainable_fis, X, y, point_n=25):
-    trainable_fis.eval()
-    X_t = torch.tensor(X, dtype=torch.float32)
-    preds = trainable_fis(X_t, point_n=point_n).detach().numpy()
-    return np.mean((preds.reshape(-1) - y)**2)
+class DEOptimizer(NonGradientOptimiserBase):
+    """
+    Minimal DE/rand/1/bin
+    Config-aligned:
+        pop_size, iters, F, CR
+    """
 
+    def __init__(
+        self,
+        model,
+        loss_fn,
+        pop_size: int,
+        iters: int,
+        F: float,
+        CR: float,
+        device: str = "cpu",
+        **kwargs,
+    ):
+        super().__init__(model=model, loss_fn=loss_fn, device=device)
+        self.pop_size = int(pop_size)
+        self.iters = int(iters)
+        self.F = float(F)
+        self.CR = float(CR)
 
-# ========== DE ==========
-def train_with_de(
-    trainable_fis,
-    X_train,
-    y_train,
-    pop_size=30,
-    F=0.5,
-    CR=0.9,
-    n_generations=50,
-    point_n=25,
-):
+    def optimise(self, X: torch.Tensor, y: torch.Tensor):
 
+        base = self._flatten_params()
+        dim = base.numel()
 
-    dim = len(trainable_fis.flatten_params())
+        # initial population
+        pop = [base + 0.1 * torch.randn(dim) for _ in range(self.pop_size)]
 
-    pop = np.random.randn(pop_size, dim) * 0.1
-    fitness = np.zeros(pop_size)
+        # global best
+        self._load_params(base)
+        best_loss = self.evaluate(X, y)
+        best_state = self.snapshot()
 
-    def evaluate(ind):
-        trainable_fis.assign_params(ind)
-        return evaluate_fis(trainable_fis, X_train, y_train, point_n)
+        # print frequency: ~5 logs total
+        print_every = max(1, self.iters // 5)
 
-    for i in range(pop_size):
-        fitness[i] = evaluate(pop[i])
+        for it in range(1, self.iters + 1):
 
-    for gen in range(n_generations):
+            for i in range(self.pop_size):
 
-        new_pop = np.zeros_like(pop)
-        new_fit = np.zeros_like(fitness)
+                # pick a,b,c distinct and != i
+                idxs = torch.randperm(self.pop_size).tolist()
+                a, b, c = [pop[j] for j in idxs if j != i][:3]
 
-        for i in range(pop_size):
+                mutant = a + self.F * (b - c)
 
-            idxs = np.random.choice(pop_size, 3, replace=False)
-            r1, r2, r3 = pop[idxs]
+                # binomial crossover
+                cross = torch.rand(dim) < self.CR
+                trial = pop[i].clone()
+                trial[cross] = mutant[cross]
 
-            v = r1 + F * (r2 - r3)
+                # evaluate trial
+                self._load_params(trial)
+                trial_loss = self.evaluate(X, y)
 
-            cross_mask = np.random.rand(dim) < CR
-            u = np.where(cross_mask, v, pop[i])
+                # evaluate current
+                self._load_params(pop[i])
+                curr_loss = self.evaluate(X, y)
 
-            fit_u = evaluate(u)
-            if fit_u < fitness[i]:
-                new_pop[i] = u
-                new_fit[i] = fit_u
-            else:
-                new_pop[i] = pop[i]
-                new_fit[i] = fitness[i]
+                # selection
+                if trial_loss < curr_loss:
+                    pop[i] = trial
 
-        pop = new_pop
-        fitness = new_fit
+                    if trial_loss < best_loss:
+                        best_loss = trial_loss
+                        self._load_params(trial)
+                        best_state = self.snapshot()
 
-        print(f"[DE Gen {gen+1}/{n_generations}] best_mse = {fitness.min():.6f}")
+            # -------- progress print --------
+            if it == 1 or it % print_every == 0 or it == self.iters:
+                print(f"[DE ] iter={it:03d}/{self.iters} best={best_loss:.6f}")
 
-    best = pop[fitness.argmin()]
-    trainable_fis.assign_params(best)
-    return trainable_fis
+        self.restore(best_state)

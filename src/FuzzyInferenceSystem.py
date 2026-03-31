@@ -1,4 +1,5 @@
 import torch
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -135,15 +136,18 @@ class FuzzyInferenceSystem:
         x = torch.as_tensor(x, dtype=torch.float32, device=self.device)
 
         if mf_type.startswith("gaussmf_casp"):
-   
             raw_sigma = params[0]
             raw_center = params[1]
 
+            # --- CASPs safe mapping ---
+            sigma = F.softplus(raw_sigma)
+            sigma = torch.clamp(sigma, min=1e-3)      # ✅ avoid tiny sigma -> inf / nan
+            center = torch.sigmoid(raw_center)        # in (0,1)
 
-            sigma = F.softplus(raw_sigma) + 1e-4
-            center = raw_center
+            z = -((x - center) ** 2) / (2 * sigma ** 2)
+            z = torch.clamp(z, min=-60.0, max=0.0)    # ✅ avoid exp overflow/underflow extremes
+            return torch.exp(z)
 
-            return torch.exp(-((x - center) ** 2) / (2 * sigma ** 2))
 
 
         if mf_type == "trimf":
@@ -209,6 +213,79 @@ class FuzzyInferenceSystem:
 
         else:
             raise NotImplementedError
+        
+
+    def eval_fis(self, theta_list, rules, X, num_mfs, decode_trapmf_fn, point_n=201):
+       
+        device = self.device
+
+        
+        X = torch.as_tensor(X, dtype=torch.float32, device=device)
+        N, d = X.shape
+
+       
+        EPS = 1e-12  
+
+        def trapmf_local(x, a, b, c, dv):
+            return torch.clamp(
+                torch.min(
+                    torch.min((x - a) / (b - a + EPS), torch.ones_like(x)),
+                    (dv - x) / (dv - c + EPS)
+                ),
+                0.0,
+                1.0
+            )
+
+
+        input_mu = []
+        for i in range(d):
+            theta = theta_list[i]
+            m = num_mfs[i]
+            row = []
+            for j in range(1, m + 1):
+                a, b, c, dv = decode_trapmf_fn(theta, m, j)
+                row.append(trapmf_local(X[:, i], a, b, c, dv))
+            input_mu.append(row)
+
+    
+        fires = []
+        for r in rules:
+            mus = []
+            for j in range(d):
+                idx = r[j]
+                if idx == 0:
+                    continue
+                mu = input_mu[j][abs(idx) - 1]
+                if idx < 0:
+                    mu = 1 - mu
+                mus.append(mu)
+
+            if len(mus) == 0:
+                firing = torch.zeros(N, device=device)
+            else:
+                firing = torch.stack(mus, dim=0).prod(dim=0)
+
+            fires.append(firing * r[-2])
+
+        fires = torch.stack(fires, dim=0)
+
+
+        theta_y = theta_list[-1]
+        m_out = num_mfs[-1]
+
+        y = torch.linspace(theta_y.min(), theta_y.max(), point_n, device=device)
+        agg = torch.zeros(N, point_n, device=device)
+
+        for r_idx, r in enumerate(rules):
+            mf_idx = abs(r[d]) - 1
+            a, b, c, dv = decode_trapmf_fn(theta_y, m_out, mf_idx + 1)
+            mu_y = trapmf_local(y, a, b, c, dv)
+            applied = torch.min(mu_y.unsqueeze(0), fires[r_idx].unsqueeze(1))
+            agg = torch.max(agg, applied)
+
+        return (agg * y.unsqueeze(0)).sum(dim=1) / torch.clamp(agg.sum(dim=1), min=EPS)
+
+
 
     # ============================================================
     # evalfis (single-sample, fuzzyR-compatible)
@@ -311,6 +388,8 @@ class FuzzyInferenceSystem:
 
         else:
             raise NotImplementedError
+        
+        
 
     # ============================================================
     # summary
@@ -464,7 +543,9 @@ class FuzzyInferenceSystem:
                     firing = stack.max(dim=0).values
 
             firing = firing * rule[-2]
+            firing = torch.clamp(firing, min=1e-6)  
             fires.append(firing)
+
 
         fires = torch.stack(fires, dim=0)  
 
@@ -497,5 +578,50 @@ class FuzzyInferenceSystem:
 
         # ---------- defuzz ----------
         num = (agg * y.unsqueeze(0)).sum(dim=1)
-        den = agg.sum(dim=1) + 1e-12
+        den = agg.sum(dim=1)
+        den = torch.clamp(den, min=1e-8)  
         return num / den
+
+
+def writefis(fis, state_dict, path, metadata=None):
+    """
+    Save a fuzzy inference system to disk.
+    """
+
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    torch.save(
+        {
+            "fis": fis,
+            "state_dict": state_dict,
+            "metadata": metadata or {},
+        },
+        path,
+    )
+
+def readfis(path, map_location="cpu"):
+    """
+    Load a fuzzy inference system from disk.
+    """
+
+    import torch
+    from src.trainable_fis import TrainableFIS 
+
+    checkpoint = torch.load(
+    path,
+    map_location=map_location,
+    weights_only=False,  
+    )
+
+
+    fis = checkpoint["fis"]
+    metadata = checkpoint.get("metadata", {})
+
+    casp_mode = metadata.get("casp_mode", "free")
+
+    model = TrainableFIS(fis, casp_mode=casp_mode)
+    model.load_state_dict(checkpoint["state_dict"])
+    model.eval()
+
+    return model, metadata
+

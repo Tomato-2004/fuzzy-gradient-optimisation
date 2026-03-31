@@ -1,0 +1,16 @@
+{
+  "mf_inputs": [
+    3,
+    3,
+    3,
+    3,
+    3
+  ],
+  "mf_output": 8,
+  "lb_rmse": 0.0,
+  "score": 214.20109830572207,
+  "coverage_topK": 85.66978193146431,
+  "rules_to_target": 58,
+  "coverage_at_target": 78.19314641744555,
+  "cum_cov_all": 85.66978193146431
+}

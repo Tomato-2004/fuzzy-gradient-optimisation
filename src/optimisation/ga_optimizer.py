@@ -1,72 +1,76 @@
-# src/optimisation/ga_optimizer.py
-
-import numpy as np
+from __future__ import annotations
 import torch
+from .non_gradient_base import NonGradientOptimiserBase
 
 
-# =======================
-# Fitness 
-# =======================
-def evaluate_fis(trainable_fis, X, y, point_n=25):
-    trainable_fis.eval()
-    X_t = torch.tensor(X, dtype=torch.float32)
-    preds = trainable_fis(X_t, point_n=point_n).detach().numpy()
-    return np.mean((preds.reshape(-1) - y)**2)
+class GAOptimizer(NonGradientOptimiserBase):
+    """
+    Minimal real-valued GA strictly matching config:
+    pop_size, iters, mutation_rate
+    """
 
+    def __init__(
+        self,
+        model,
+        loss_fn,
+        pop_size: int,
+        iters: int,
+        mutation_rate: float,
+        device: str = "cpu",
+        **kwargs,
+    ):
+        super().__init__(model=model, loss_fn=loss_fn, device=device)
+        self.pop_size = int(pop_size)
+        self.iters = int(iters)
+        self.mutation_rate = float(mutation_rate)
 
-# =======================
-# GA 
-# =======================
-def train_with_ga(
-    trainable_fis,
-    X_train,
-    y_train,
-    pop_size=30,
-    n_generations=50,
-    mutation_rate=0.1,
-    crossover_rate=0.7,
-    point_n=25,
-):
+    def optimise(self, X: torch.Tensor, y: torch.Tensor):
 
-    dim = len(trainable_fis.flatten_params())
+        base = self._flatten_params()
+        dim = base.numel()
 
-    pop = np.random.randn(pop_size, dim) * 0.1
+        pop = [base + 0.1 * torch.randn(dim) for _ in range(self.pop_size)]
 
-    def fitness(ind):
-        trainable_fis.assign_params(ind)
-        return evaluate_fis(trainable_fis, X_train, y_train, point_n)
+        self._load_params(base)
+        best_loss = self.evaluate(X, y)
+        best_state = self.snapshot()
 
-    scores = np.array([fitness(ind) for ind in pop])
+        print_every = max(1, self.iters // 5)
 
-    for gen in range(n_generations):
+        for it in range(1, self.iters + 1):
 
-        idx = scores.argsort()
-        pop = pop[idx]
-        scores = scores[idx]
+            scored = []
+            for v in pop:
+                self._load_params(v)
+                scored.append((v, self.evaluate(X, y)))
 
-        elites = pop[:2]
+            scored.sort(key=lambda t: t[1])
 
-        new_pop = elites.copy()
+            if scored[0][1] < best_loss:
+                best_loss = scored[0][1]
+                self._load_params(scored[0][0])
+                best_state = self.snapshot()
 
-        while len(new_pop) < pop_size:
+            survivors = [v for v, _ in scored[: max(2, self.pop_size // 2)]]
 
-            if np.random.rand() < crossover_rate:
-                p1, p2 = pop[np.random.randint(pop_size)], pop[np.random.randint(pop_size)]
-                mask = np.random.rand(dim) < 0.5
-                child = np.where(mask, p1, p2)
-            else:
-                child = pop[np.random.randint(pop_size)].copy()
+            new_pop = survivors.copy()
+            while len(new_pop) < self.pop_size:
+                p1 = survivors[torch.randint(len(survivors), (1,)).item()]
+                p2 = survivors[torch.randint(len(survivors), (1,)).item()]
 
-            if np.random.rand() < mutation_rate:
-                child += 0.1 * np.random.randn(dim)
+                mask = torch.rand(dim) < 0.5
+                child = p1.clone()
+                child[mask] = p2[mask]
 
-            new_pop = np.vstack([new_pop, child])
+                if torch.rand(1).item() < self.mutation_rate:
+                    child = child + 0.1 * torch.randn(dim)
 
-        pop = new_pop
-        scores = np.array([fitness(ind) for ind in pop])
+                new_pop.append(child)
 
-        print(f"[GA Gen {gen+1}/{n_generations}] best_mse = {scores.min():.6f}")
+            pop = new_pop
 
-    best = pop[scores.argmin()]
-    trainable_fis.assign_params(best)
-    return trainable_fis
+            # -------- progress print --------
+            if it == 1 or it % print_every == 0 or it == self.iters:
+                print(f"[GA ] iter={it:03d}/{self.iters} best={best_loss:.6f}")
+
+        self.restore(best_state)

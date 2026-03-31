@@ -1,8 +1,0 @@
-optimiser,avg_rank
-adam,1.1
-pso,2.95
-de,3.95
-ga,4.15
-rmsprop,4.55
-sgd,4.8
-cmaes,6.5

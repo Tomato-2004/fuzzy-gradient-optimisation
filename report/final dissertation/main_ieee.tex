@@ -1,0 +1,880 @@
+\documentclass[a4paper,12pt,oneside]{article}
+
+% ===================== Packages =====================
+\usepackage{float}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{indentfirst}
+\setlength{\parindent}{1.5em}
+\usepackage{fancyhdr}
+\usepackage{minted}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage[left=1.2in,right=1.2in,top=1in,bottom=1.2in]{geometry}
+\usepackage{hyperref}
+\usepackage{adjustbox}
+
+
+% Optional subsubsubsection
+\newcommand{\subsubsubsection}[1]{\paragraph{#1}\mbox{}\\}
+
+% ===================================================
+\begin{document}
+
+% ===================== COVER PAGE =====================
+\begin{center}
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.7\textwidth]{nottingham logo.png}
+    \end{figure}
+    \vspace{1cm}
+    
+    \textbf{\large COMP3003 Undergraduate Final Report}\\[1.5cm]
+    \textbf{\Huge A Comparative Study of Gradient and Non-Gradient Optimisation Methods for Fuzzy Systems}\\[1cm]
+
+    \textbf{Supervisor}: Chao Chen\\[1cm]
+    
+    \vspace{3cm}
+    \textbf{Author}\\
+    Xingqi Hou (20516643 / scyxh6)\\[1cm]
+    
+    \vspace{3cm}
+    Submitted on \today \\[1cm]
+    School of Computer Science\\
+    University of Nottingham
+\end{center}
+\newpage
+
+\section*{Contributions (To Be Filled)}
+\textit{[Placeholder: Add contributions from CASP ablation, error curves, ranking analysis, and PyTorch tensorised FIS implementation.]}
+\newpage
+
+% ===================== TITLE =====================
+\title{A Comparative Study of Gradient and Non-Gradient Optimisation Methods for Fuzzy Inference Systems}
+
+% ===================== AUTHORS  =====================
+\author{}
+\maketitle
+
+% ===================== ABSTRACT =====================
+\begin{abstract}
+Optimisation plays a critical role in the performance of fuzzy inference systems,
+yet empirical comparisons between optimisation methods are often confounded by
+constraint handling, membership-function design, and inconsistent configuration
+selection protocols.
+This paper presents a staged and reproducible experimental framework for
+Mamdani-type fuzzy inference systems (FIS) within a unified and fully
+differentiable PyTorch implementation, with the practical goal of producing
+actionable guidance on optimisation method selection.
+
+The proposed framework explicitly separates early design decisions from
+optimiser-specific configuration search and final benchmarking.
+
+In Stage~I, we provide principled design guidance for constraint parameterisation
+and membership-function granularity initialisation.
+Based on established theoretical insights from prior work, a CASPs variant is
+selected according to optimisation objectives, and a lightweight structural evaluation is performed to identify a representative
+membership-function granularity for each dataset without performing full optimisation.
+This stage serves to reduce the design space and avoid confounding downstream
+results with arbitrary structural choices.
+
+In Stage~II, with constraint handling and membership-function granularity fixed,
+optimiser-specific configuration selection is performed over candidate
+initialisation strategies and hyperparameter settings using a unified successive
+halving (SH) protocol under limited optimisation budgets.
+This ensures fair and efficient allocation of computational resources across
+both gradient-based and non-gradient optimisation methods.
+
+In Stage~III, the resulting optimiser--configuration combinations are evaluated
+on held-out test sets across ten benchmark regression datasets using multiple
+random seeds.
+All datasets, model architectures, and evaluation budgets are held constant
+across optimisers, enabling controlled comparison in terms of predictive
+accuracy, robustness, and computational efficiency.
+
+By explicitly decoupling constraint selection, structural initialisation, and
+configuration optimisation, the proposed framework reduces methodological
+confounding and provides reproducible, system-level guidance for optimising
+differentiable Mamdani-type fuzzy inference systems.
+\end{abstract}
+
+
+
+\begin{IEEEkeywords}
+Fuzzy inference systems, optimisation, gradient-based optimisation,
+non-gradient optimisation, evolutionary algorithms, empirical comparison
+\end{IEEEkeywords}
+
+% ===================================================
+\section{Introduction}
+
+Since the introduction of fuzzy sets by Zadeh in 1965~\cite{zadeh1965},
+fuzzy inference systems (FIS) have become a widely used modelling paradigm
+for regression, control, and decision-support, particularly in applications
+where interpretability and linguistic transparency are required.
+A practical FIS relies on tunable components such as membership functions
+and rule parameters, and its predictive performance depends critically on
+how effectively these parameters are optimised.
+
+Historically, fuzzy-system optimisation has been dominated by non-gradient
+and evolutionary methods, motivated by highly non-convex search landscapes
+and the presence of non-differentiable design choices.
+Representative approaches include genetic algorithms (GA)~\cite{holland1975ga},
+particle swarm optimisation (PSO)~\cite{kennedy1995pso}, and differential
+evolution (DE)~\cite{storn1997de}.
+More recently, advances in differentiable programming have enabled fully
+differentiable implementations of Mamdani-type fuzzy inference systems,
+making gradient-based optimisation increasingly practical.
+In particular, adaptive first-order methods such as Adam~\cite{kingma2015adam}
+and RMSprop~\cite{tieleman2012rmsprop} have become standard tools for
+large-scale continuous optimisation.
+
+Despite the widespread use of both optimisation paradigms, there remains
+limited consensus on their relative effectiveness under controlled and
+consistent experimental conditions for Mamdani-type fuzzy inference systems.
+Many existing studies introduce new optimisation variants or hybrid strategies
+and evaluate them under heterogeneous datasets, architectures,
+constraint-handling mechanisms, membership-function designs, and tuning
+protocols.
+As a result, observed performance differences are difficult to attribute
+unambiguously to the optimisation method itself, and conclusions may be
+sensitive to arbitrary design choices made early in the modelling pipeline.
+
+Recent work has demonstrated that gradient-based optimisation of Mamdani-type
+fuzzy systems can be implemented efficiently via automatic differentiation
+within modern machine learning frameworks~\cite{chen2024gradient}, while
+non-gradient approaches remain competitive in settings characterised by
+highly non-convex or multimodal error surfaces~\cite{zhou2023stochastic}.
+In parallel, constraint-aware parameterisations such as Constraints Always
+Satisfied Parameters (CASPs) provide a principled mechanism for enforcing
+semantic and geometric constraints during optimisation without resorting to
+ad-hoc projection or penalty schemes~\cite{chen2025casp}.
+
+However, in many comparative studies, constraint handling, membership-function
+granularity, parameter initialisation, and optimiser hyperparameters are
+treated as a single entangled design space.
+This entanglement makes it difficult to isolate the effect of the optimisation
+method itself and increases the risk of methodological confounding.
+In particular, early structural design choices—such as the degree of
+constraint strictness and the number of membership functions per variable—can
+strongly influence downstream optimisation behaviour, yet are often selected
+heuristically or fixed without explicit justification.
+
+To address these limitations, this paper proposes a controlled and staged
+experimental framework for the empirical comparison of gradient-based and
+non-gradient optimisation methods for Mamdani-type fuzzy inference systems
+within a unified and fully differentiable implementation.
+Rather than jointly optimising all design choices, the framework explicitly
+separates early design guidance, optimiser-specific configuration selection,
+and final performance evaluation.
+
+Specifically, the study adopts a three-stage experimental protocol that
+explicitly separates early design guidance, optimiser-specific configuration
+selection, and final performance evaluation.
+This separation is intended to minimise methodological confounding and to
+enable interpretable comparison of optimisation behaviour under controlled
+conditions.
+
+
+
+\section{Related Work}
+
+Optimisation has long been a central research topic in the development of
+fuzzy inference systems.
+Early work predominantly focused on non-gradient and evolutionary algorithms,
+motivated by highly non-convex search landscapes and the frequent presence of
+non-differentiable operators.
+Genetic algorithms (GA), particle swarm optimisation (PSO), differential
+evolution (DE), and covariance matrix adaptation evolution strategy (CMA-ES)
+have been widely applied to optimise membership functions, rule parameters,
+and fuzzy partitions
+\cite{holland1975ga, kennedy1995pso, storn1997de, hansen2001cmaes}.
+Comprehensive surveys further document the effectiveness of evolutionary
+approaches across a broad range of fuzzy-system applications
+\cite{cordon2001review}.
+However, empirical comparisons in this literature are often conducted under
+heterogeneous architectures, initialisation choices, and tuning protocols,
+making it difficult to isolate the effect of the optimisation method itself.
+
+More recently, advances in differentiable programming have enabled
+gradient-based optimisation of Mamdani-type fuzzy inference systems.
+By expressing fuzzy inference operations as differentiable tensor computations,
+automatic differentiation can be used to optimise membership-function
+parameters efficiently within modern machine learning frameworks
+\cite{chen2024gradient}.
+While gradient-based approaches have demonstrated competitive performance,
+their behaviour remains sensitive to constraint handling, parameter
+initialisation, and structural design choices, which are not always treated
+explicitly in comparative studies.
+
+Constraint handling constitutes a particularly important aspect of fuzzy
+system optimisation, as membership-function parameters are subject to semantic
+and geometric constraints that must be preserved throughout optimisation.
+Traditional approaches often enforce such constraints through heuristic
+projection, penalty terms, or restricted parameterisations.
+Constraint-aware reparameterisation methods, such as Constraints Always
+Satisfied Parameters (CASPs), provide a principled alternative by guaranteeing
+constraint satisfaction by construction
+\cite{chen2025casp}.
+The CASPs framework introduces multiple variants that trade off constraint
+strictness, interpretability, and optimisation flexibility.
+Rather than re-evaluating these trade-offs experimentally, the present study
+adopts CASPs as a constraint-handling mechanism and follows the design
+guidelines established in prior work.
+
+Beyond constraint handling, the structural design of fuzzy inference systems,
+including the number of membership functions per input and output variable,
+plays a critical role in determining model capacity and optimisation behaviour.
+Nevertheless, membership-function granularity is often fixed a priori or
+implicitly tuned together with optimiser hyperparameters, making its influence
+difficult to disentangle from optimiser performance.
+This structural aspect is rarely addressed explicitly in large-scale
+comparative optimisation studies.
+
+A further methodological challenge in comparative optimisation research is
+hyperparameter tuning fairness.
+Inconsistent or optimiser-specific tuning practices can substantially bias
+empirical results and lead to misleading conclusions.
+Multi-fidelity approaches such as successive halving provide a principled
+framework for allocating computational budget across competing configurations
+\cite{jamieson2016sh}, yet remain underutilised in the context of fuzzy inference
+system optimisation.
+
+Motivated by these gaps, this paper revisits the empirical comparison of
+gradient-based and non-gradient optimisation methods for Mamdani-type fuzzy
+inference systems under a unified and fully differentiable implementation.
+By explicitly separating constraint parameterisation, structural
+initialisation, configuration selection, and final evaluation, the proposed
+framework aims to reduce methodological confounding and provide reproducible,
+system-level guidance on optimiser behaviour.
+
+% ===================================================
+\section{Methodology}\label{sec:method}
+
+This section describes the fuzzy inference system model, optimisation objective,
+and the staged experimental framework adopted in this study.
+The methodology is explicitly designed to separate early design decisions from
+optimiser-specific configuration search and final performance evaluation, thereby
+reducing methodological confounding.
+All stages described in this section correspond directly to the implemented
+experimental pipeline.
+
+% ===================================================
+\subsection{Fuzzy Inference System Model}
+
+We consider a Mamdani-type fuzzy inference system (FIS) with $d$ input variables
+and a single output variable.
+For each input variable $x_k$, a set of trapezoidal membership functions (MFs)
+is defined, and fuzzy rules are constructed by combining antecedent MFs across
+all input dimensions.
+
+Let $\theta$ denote the concatenation of all antecedent membership-function
+parameters.
+In this study, optimisation is restricted exclusively to antecedent MF
+parameters.
+The rule structure and consequent output MFs are constructed in an initial
+rule-generation stage and remain fixed throughout all optimisation experiments.
+This design choice isolates optimiser behaviour on continuous antecedent
+parameter learning and avoids confounding effects introduced by joint
+optimisation of consequents or rule structures.
+
+\paragraph*{Rule base construction and MF initialisation.}
+For each dataset and random seed, the fuzzy rule base is constructed once
+prior to optimisation and remains fixed throughout all experimental stages.
+A k-means-based discretisation procedure is applied independently to each
+input variable and to the output variable, producing ordered categorical
+labels based on cluster means.
+Fuzzy rules are generated by enumerating observed combinations of input
+categories, and each rule is assigned a consequent corresponding to the most
+frequent output category within the associated data subset.
+
+Initial trapezoidal membership-function parameters are derived directly from
+the empirical ranges of the resulting clusters using a deterministic
+range-based construction.
+This procedure is identical across all optimisation methods and random seeds,
+ensuring that observed performance differences arise solely from optimiser
+behaviour rather than differences in rule structure or initialisation.
+
+All fuzzy inference operations, including MF evaluation, rule firing,
+aggregation, and defuzzification, are implemented as differentiable tensor
+operations within a unified PyTorch framework.
+This enables the use of both gradient-based and non-gradient optimisation
+methods under an identical forward-pass and loss-evaluation pipeline.
+% ===================================================
+\subsection{Optimisation Objective}
+
+Given a training dataset $\{(x_i, y_i)\}_{i=1}^{N}$, optimisation is formulated
+as minimisation of the mean squared error (MSE):
+\begin{equation}
+\mathcal{L}(\theta)
+=
+\frac{1}{N}
+\sum_{i=1}^{N}
+\left( \hat{y}(x_i) - y_i \right)^2 ,
+\end{equation}
+where $\hat{y}(x_i)$ denotes the crisp output produced by centroid
+defuzzification.
+All optimisation methods considered in this study minimise the same objective
+over an identical parameter space.
+
+% ===================================================
+\subsection{Stage I: Constraint and Initialisation Design Guidance}
+
+Stage~I establishes principled design guidance for
+(i) constraint parameterisation and
+(ii) membership-function granularity initialisation.
+Stage~I reduces the design space prior to optimiser-specific
+configuration search, ensuring that subsequent comparisons reflect optimiser
+behaviour rather than arbitrary structural choices.
+
+% ---------------------------------------------------
+\subsubsection{Constraint Parameterisation via CASPs}
+
+Membership-function parameters in fuzzy inference systems are subject to semantic
+and geometric constraints, such as ordering and non-negativity, which must be
+preserved throughout optimisation.
+This study adopts the Constraints Always Satisfied Parameters (CASPs) framework
+\cite{chen2025casp}, which enforces such constraints by construction through
+reparameterisation.
+
+The CASPs framework defines multiple variants that differ in the degree of
+constraint coupling across membership functions.
+CASPs-Single imposes the strictest constraints by tightly coupling adjacent MFs,
+ensuring well-structured overlap and strong semantic interpretability.
+However, this strict coupling substantially restricts parameter freedom and can
+limit optimisation performance, particularly in complex or highly non-convex
+loss landscapes.
+
+CASPs-Adapted relaxes some of the inter-MF coupling constraints while preserving
+basic structural regularity.
+This variant provides a compromise between interpretability and optimisation
+flexibility, but may still introduce structural bias that affects optimiser
+behaviour.
+
+CASPs-Free enforces only the minimal internal ordering constraints required for
+each MF to remain valid.
+By removing inter-MF overlap constraints, CASPs-Free provides maximal parameter
+freedom during optimisation.
+Prior work has shown that this variant consistently achieves superior RMSE
+performance when predictive accuracy is prioritised over strict semantic
+structure \cite{chen2025casp}.
+
+In this study, the primary objective is to compare optimisation methods in terms
+of predictive performance under controlled and reproducible conditions.
+Accordingly, CASPs-Free is adopted uniformly throughout all subsequent stages.
+Nevertheless, CASPs-Single or CASPs-Adapted may be preferable in applications
+where interpretability, smooth linguistic transitions, or strict semantic
+structure are prioritised over raw predictive accuracy.
+
+% ---------------------------------------------------
+\subsubsection{Membership-Function Granularity Initialisation}
+
+Beyond constraint parameterisation, the number of membership functions per input
+and output variable constitutes a key structural design choice that directly
+affects model capacity and optimisation behaviour.
+Overly coarse MF partitions may limit approximation capability, whereas
+excessively fine partitions can lead to redundant rules, dominant rule coverage,
+and unstable or inefficient optimisation.
+
+To determine appropriate MF granularities without performing parameter
+optimisation, a lightweight, structure-only evaluation is conducted in
+Stage~I.
+Candidate MF-count configurations are randomly sampled within predefined ranges
+for each dataset.
+For each candidate configuration, a fuzzy rule base is constructed using the
+same k-means-based discretisation procedure adopted throughout the study, while
+all membership-function parameters remain fixed.
+
+Each configuration is assessed using a composite structural score that captures
+the suitability of the induced rule base, rather than predictive performance.
+The score incorporates:
+(i) a lower bound on achievable error derived from within-rule output variance,
+(ii) rule coverage and compactness statistics,
+(iii) entropy-based measures of rule and membership-function utilisation, and
+(iv) penalties for dominant or redundant rules.
+
+Crucially, no parameter optimisation or iterative training is performed during
+this stage.
+The purpose of this evaluation is solely to exclude structurally degenerate or
+unnecessarily complex MF configurations and to identify reasonable,
+dataset-specific MF granularities.
+The selected MF counts are then fixed and recorded in the experimental
+configuration registry.
+All subsequent experiments in Stage~II and Stage~III are conducted using these
+fixed MF granularities without further modification.
+\paragraph*{MF granularity selection protocol.}
+Concretely, MF granularity selection is implemented as an optimiser-independent
+structural evaluation procedure.
+For each dataset, candidate MF-count configurations are randomly sampled from
+bounded discrete ranges for all input and output variables.
+Each sampled configuration is evaluated by constructing a rule base via
+one-dimensional k-means discretisation and computing a set of fixed
+rule-based structural metrics, including a lower bound on achievable RMSE,
+rule coverage statistics, entropy-based utilisation measures, and penalties
+for dominant or redundant rules.
+
+Configurations violating predefined structural constraints are discarded
+without further consideration.
+The remaining configurations are ranked using a fixed weighted scoring
+function defined over these structural metrics.
+Based on this ranking, a single MF configuration is selected for each dataset
+and fixed for all subsequent experimental stages.
+No optimiser-specific information is used during this process, and no parameter
+optimisation is performed at any point in Stage~I.
+
+
+% ===================================================
+\subsection{Stage II: Configuration Selection under Fixed Design}
+
+In Stage~II, optimiser-specific configuration selection is performed under the
+fixed design choices established in Stage~I.
+Constraint handling is fixed to CASPs-Free, and MF granularity is restricted to
+the ranges identified by the structural evaluation.
+
+For each optimiser, a discrete set of candidate initialisation strategies and
+hyperparameter configurations is defined.
+Configuration selection is performed using a unified successive halving (SH)
+protocol \cite{jamieson2016sh}, which allocates computational budget efficiently
+across competing configurations.
+
+All candidate configurations are initially evaluated under limited optimisation
+budgets.
+Poorly performing configurations are progressively discarded, and the remaining
+configurations are re-evaluated under increased budgets.
+Throughout Stage~II, performance measurements are used exclusively for
+configuration selection and do not contribute to final performance reporting.
+
+% ===================================================
+\subsection{Stage III: Final Evaluation Protocol}
+
+Final evaluation is conducted using the optimiser-specific configurations
+selected in Stage~II.
+Experiments are performed on a subset of ten benchmark regression datasets drawn
+from the collection commonly adopted in prior comparative studies
+\cite{zhou2023stochastic}.
+
+For each dataset, all optimisers are evaluated under identical experimental
+conditions using ten fixed random seeds.
+All datasets are normalised using min--max scaling and split into training and
+test sets.
+The test set is accessed exclusively at this stage and only once per
+configuration.
+
+Performance is assessed in terms of predictive accuracy, robustness across
+datasets, and computational efficiency.
+By restricting Stage~III to final evaluation only, the staged protocol ensures
+that reported results reflect optimiser behaviour rather than artefacts of
+design selection or configuration tuning.
+
+% ===================================================
+% ===================================================
+\section{Experimental Evaluation}
+
+Following the staged methodology described in
+Section~\ref{sec:method}, this section reports the datasets,
+experimental setup, and empirical results obtained under the fixed
+design and evaluation protocol.
+Stage~I establishes dataset-specific structural design choices,
+Stage~II selects optimiser configurations, and Stage~III reports the
+final test-set performance used for comparative analysis.
+
+
+% ===================================================
+\subsection{Datasets}
+
+Experiments are conducted on ten benchmark regression datasets selected from
+the collection commonly adopted in prior comparative studies such as
+\cite{zhou2023stochastic}.
+The datasets span a range of sample sizes and input dimensionalities, providing
+a diverse testbed for evaluating optimiser behaviour under controlled
+conditions.
+Table~\ref{tab:datasets} summarises the datasets used in the experimental
+evaluation.
+
+\begin{table}[t]
+\centering
+\caption{Regression datasets used in the experimental evaluation.}
+\label{tab:datasets}
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Dataset} & \textbf{Samples (N)} & \textbf{Features (d)} \\
+\midrule
+Abalone   & 4177 & 10 \\
+Airfoil  & 1503 & 5  \\
+Ankara   & 321  & 9  \\
+AutoMPG6 & 84   & 7  \\
+Baseball & 1340 & 22 \\
+Concrete & 1030 & 8  \\
+Izmir    & 1461 & 9  \\
+Laser    & 993  & 4  \\
+Treasury & 1049 & 15 \\
+Wine     & 1599 & 11 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+% ===================================================
+\subsection{Experimental Setup and Reproducibility}
+
+All experiments are implemented within a unified PyTorch-based framework,
+ensuring identical forward-pass computation and loss evaluation across all
+optimisers.
+For each dataset, data are split into training and test sets using a fixed
+five-fold partition, and ten random seeds are used to ensure robustness.
+Input variables are normalised using min--max scaling where appropriate.
+
+For each dataset and seed, the fuzzy rule base and initial membership-function
+parameters are generated once using a k-means-based discretisation procedure.
+Only antecedent membership-function parameters are optimised.
+The rule base, MF granularity, constraint parameterisation, and optimisation
+budget are held constant across all optimisation methods, ensuring that
+observed performance differences can be attributed to optimiser behaviour
+rather than confounding design choices.
+
+% ===================================================
+\subsection{Stage I: Constraint and Structural Design Decisions}
+
+Stage~I instantiates the design choices established in
+Section~\ref{sec:method} for each dataset prior to optimiser comparison.
+All decisions made at this stage are fixed for the remainder of the experimental
+pipeline to ensure fair and controlled evaluation.
+
+\paragraph*{Constraint parameterisation.}
+Based on the design guidelines established in prior work on CASPs
+\cite{chen2025casp}, the choice of constraint mode is determined by the primary
+optimisation objective.
+Since this study focuses on predictive performance rather than strict semantic
+regularity, the CASPs-Free parameterisation is adopted uniformly for all
+datasets and all subsequent experimental stages.
+This ensures maximal parameter flexibility while maintaining validity of
+membership functions throughout optimisation.
+
+\paragraph*{Membership-function granularity selection.}
+In addition to constraint handling, Stage~I determines the number of membership
+functions per input and output variable for each dataset.
+Rather than fixing MF counts heuristically, a lightweight structural search is
+performed prior to optimisation to exclude degenerate or excessively complex
+configurations.
+
+Candidate MF-count configurations are evaluated using rule-based structural
+criteria, including coverage statistics, entropy-based utilisation measures,
+and a lower bound on achievable error derived from within-rule output variance.
+The selected MF granularities are fixed for each dataset and recorded in the
+experimental configuration registry.
+All optimisation experiments in Stage~II and Stage~III are conducted using these
+fixed MF configurations without further modification.
+
+For datasets with high input dimensionality, principal component analysis (PCA)
+is applied as a preprocessing step to reduce the input space to five dimensions
+prior to membership-function construction, controlling rule-base complexity
+while preserving the majority of input variance.
+
+
+% ===================================================
+\subsection{Stage II: Configuration Selection via Successive Halving}
+
+In Stage~II, optimiser-specific configuration selection is performed under the
+fixed design choices established in Stage~I.
+Constraint handling is fixed to CASPs-Free, and MF granularity is fixed to the
+values selected by the structural evaluation.
+
+For each optimiser, a discrete hyperparameter search space is defined.
+Table~\ref{tab:sh_ranges} summarises the search ranges considered for each
+optimisation method.
+Configuration selection is performed using a two-stage successive halving (SH)
+procedure, in which candidate configurations are progressively evaluated under
+increasing computational budgets and poorer configurations are discarded.
+
+\begin{table}[t]
+\centering
+\caption{Hyperparameter search ranges used in Stage~II for each optimiser.}
+\label{tab:sh_ranges}
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{ll}
+\toprule
+\textbf{Optimiser} & \textbf{Hyperparameter Search Range} \\
+\midrule
+Adam &
+Learning rate $\in \{10^{-4}, 3\times10^{-4}, 10^{-3}, 3\times10^{-3}, 3\times10^{-2}\}$;
+AMSGrad $\in \{\text{True}, \text{False}\}$ \\
+
+RMSprop &
+Learning rate $\in \{10^{-4}, 3\times10^{-4}, 10^{-3}\}$;
+$\alpha \in \{0.9, 0.99\}$ \\
+
+SGD &
+Learning rate $\in \{10^{-4}, 3\times10^{-4}, 10^{-3}, 3\times10^{-3}\}$;
+Momentum $\in \{0.0, 0.9\}$ \\
+
+PSO &
+Inertia weight $w \in \{0.4, 0.72, 0.9\}$;
+$c_1, c_2 \in \{1.2, 1.49, 2.0\}$ \\
+
+GA &
+Mutation rate $\in \{0.05, 0.1, 0.2\}$ \\
+
+DE &
+Scaling factor $F \in \{0.5, 0.8, 1.0\}$;
+Crossover rate $CR \in \{0.7, 0.9\}$ \\
+
+CMA-ES &
+Initial step size $\sigma \in \{0.1, 0.3, 0.5\}$ \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+Table~\ref{tab:sh_selected} reports the optimiser-specific configurations
+selected at the final stage of the successive halving procedure.
+These configurations are fixed for all subsequent experiments.
+
+\begin{table}[t]
+\centering
+\caption{Optimiser configurations selected by successive halving (Stage~II).}
+\label{tab:sh_selected}
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{ll}
+\toprule
+\textbf{Optimiser} & \textbf{Selected Configuration} \\
+\midrule
+Adam &
+Learning rate = 0.03; AMSGrad = False; Weight decay = 0.0 \\
+
+SGD &
+Learning rate = 0.003; Momentum = 0.9; Nesterov = False \\
+
+RMSprop &
+Learning rate = 0.001; $\alpha = 0.99$; Momentum = 0.0 \\
+
+PSO &
+Population size = 30; Iterations = 10;
+$w = 0.9$; $c_1 = 1.2$; $c_2 = 1.2$ \\
+
+GA &
+Population size = 30; Iterations = 10;
+Mutation rate = 0.05 \\
+
+DE &
+Population size = 30; Iterations = 10;
+$F = 0.5$; $CR = 0.9$ \\
+
+CMA-ES &
+Population size = 30; Iterations = 10;
+$\sigma = 0.1$ \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+% ===================================================
+\subsection{Stage III: Final Evaluation}
+
+Final evaluation is conducted using the optimiser-specific configurations
+selected in Stage~II.
+Each optimiser is evaluated on all ten datasets using ten fixed random seeds
+under identical experimental conditions.
+The test set is accessed exclusively at this stage and only once per
+configuration.
+
+Table~\ref{tab:stage3_results} summarises the final test-set performance obtained
+by each optimiser.
+Due to space constraints, only the table structure is shown here; numerical
+results are reported and discussed in the following section.
+
+\begin{table*}[t]
+\centering
+\caption{Final test RMSE obtained by each optimiser across ten datasets
+(best over ten seeds).}
+\label{tab:stage3_results}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lccccccc}
+\toprule
+Dataset & Adam & RMSprop & SGD & PSO & GA & DE & CMA-ES \\
+\midrule
+Abalone   
+& \textbf{2.118} & 2.221 & 2.228 & 2.373 & 2.788 & 2.703 & 3.414 \\
+
+Airfoil  
+& 6.987 & 7.797 & 7.444 & 7.408 & 7.948 & \textbf{6.863} & 7.689 \\
+
+Ankara   
+& \textbf{2.405} & 6.321 & 4.627 & 2.805 & 3.920 & 3.253 & 5.380 \\
+
+AutoMPG6 
+& \textbf{2.267} & 2.379 & 2.386 & 2.628 & 2.651 & 2.544 & 2.673 \\
+
+Baseball 
+& \textbf{726.507} & 793.069 & 774.236 & 776.944 & 760.099 & 758.258 & 802.368 \\
+
+Concrete 
+& \textbf{10.877} & 12.128 & 11.672 & 11.262 & 11.368 & 11.423 & 12.208 \\
+
+Izmir    
+& \textbf{2.052} & 4.154 & 2.811 & 2.319 & 3.308 & 2.853 & 3.776 \\
+
+Laser    
+& \textbf{5.445} & 6.219 & 5.633 & 6.694 & 8.319 & 7.827 & 9.462 \\
+
+Treasury 
+& 1.195 & 1.223 & \textbf{0.989} & 1.187 & 1.148 & 1.156 & 1.283 \\
+
+Wine     
+& \textbf{0.097} & 0.611 & 0.592 & 0.206 & 0.338 & 0.211 & 0.486 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table*}
+
+
+
+
+% ===================================================
+% ===================================================
+\section{Discussion}
+
+The Stage~III results provide a controlled comparison of gradient-based and
+non-gradient optimisation methods for Mamdani-type fuzzy inference systems under
+a unified experimental protocol.
+Since all optimisers are evaluated using configurations selected in Stage~II,
+with identical model structure, initialisation strategy, and optimisation
+budgets, the observed performance differences can be attributed primarily to
+intrinsic optimiser behaviour rather than confounding experimental factors.
+
+A first key observation is that no single optimisation method dominates across
+all datasets.
+Nevertheless, clear trends emerge when examining performance across the ten
+benchmark problems.
+Among the methods considered, Adam achieves the lowest test RMSE on the largest
+number of datasets, including Abalone, Ankara, AutoMPG6, Baseball, Concrete,
+Izmir, Laser, and Wine (Table~\ref{tab:stage3_results}).
+This indicates that adaptive gradient-based optimisation provides a strong and
+robust default choice for a wide range of regression tasks under the evaluated
+experimental conditions.
+
+Non-gradient and population-based optimisers remain competitive on specific
+datasets.
+Differential Evolution (DE) achieves the best performance on Airfoil, while SGD
+outperforms all other methods on Treasury.
+Particle Swarm Optimisation (PSO) consistently attains near-optimal performance
+across several datasets, often ranking second-best, although it does not achieve
+the lowest RMSE as frequently as Adam.
+These results suggest that population-based methods can offer advantages on
+particular problem instances, but their benefits are not uniform across
+datasets.
+
+Another notable finding is the variability in optimiser behaviour across
+datasets with differing characteristics.
+Datasets for which gradient-based methods perform strongly tend to exhibit
+smoother optimisation landscapes, where local gradient information can be
+exploited effectively.
+In contrast, the relative success of population-based methods on some datasets
+suggests increased robustness to irregular or multimodal error surfaces, albeit
+at the cost of greater computational effort.
+
+Overall, the observed performance differences highlight that optimiser behaviour
+in fuzzy inference systems is strongly dataset-dependent.
+While adaptive gradient-based methods benefit from smooth or moderately
+structured loss landscapes, population-based approaches exhibit greater
+robustness to irregular or multimodal surfaces.
+These findings underscore the importance of controlled experimental protocols
+for disentangling optimiser behaviour from structural and configuration-related
+effects.
+
+
+\section{Conclusion}
+
+This paper proposed a staged and reproducible experimental framework for the
+controlled comparison of gradient-based and non-gradient optimisation methods
+for Mamdani-type fuzzy inference systems.
+By explicitly decoupling structural design decisions, optimiser configuration
+selection, and final evaluation, the framework reduces methodological
+confounding and enables interpretable, system-level analysis of optimiser
+behaviour.
+
+Empirical results across ten benchmark regression datasets show that no single
+optimisation method is universally optimal.
+However, adaptive gradient-based optimisation, particularly Adam, demonstrates
+the strongest overall robustness under the fixed experimental protocol,
+achieving the best performance on the largest number of datasets when combined
+with the configurations selected via successive halving.
+
+Future work will extend the proposed framework to larger benchmark suites,
+broader configuration spaces, and alternative fuzzy inference architectures,
+enabling more comprehensive evaluation of optimisation strategies under
+increased experimental coverage.
+
+
+
+% ===================== REFERENCES =====================
+\begin{thebibliography}{99}
+
+\bibitem{zadeh1965}
+L.~A. Zadeh, ``Fuzzy sets,'' \emph{Information and Control}, vol.~8, no.~3,
+pp.~338--353, 1965.
+
+\bibitem{holland1975ga}
+J.~H. Holland, \emph{Adaptation in Natural and Artificial Systems}.
+Ann Arbor, MI, USA: University of Michigan Press, 1975.
+
+\bibitem{kennedy1995pso}
+J.~Kennedy and R.~Eberhart, ``Particle swarm optimization,'' in
+\emph{Proc. IEEE Int. Conf. Neural Networks (ICNN)}, vol.~4, 1995,
+pp.~1942--1948.
+
+\bibitem{storn1997de}
+R.~Storn and K.~Price, ``Differential evolution -- a simple and efficient
+heuristic for global optimization over continuous spaces,''
+\emph{Journal of Global Optimization}, vol.~11, no.~4, pp.~341--359, 1997.
+
+\bibitem{hansen2001cmaes}
+N.~Hansen and A.~Ostermeier, ``Completely derandomized self-adaptation in
+evolution strategies,'' \emph{Evolutionary Computation}, vol.~9, no.~2,
+pp.~159--195, 2001.
+
+\bibitem{kingma2015adam}
+D.~P. Kingma and J.~Ba, ``Adam: A method for stochastic optimization,'' in
+\emph{Proc. Int. Conf. Learning Representations (ICLR)}, 2015.
+
+\bibitem{tieleman2012rmsprop}
+T.~Tieleman and G.~Hinton, ``Lecture 6.5---RMSprop: Divide the gradient by a
+running average of its recent magnitude,'' \emph{Neural Networks for Machine
+Learning}, Coursera, 2012.
+
+\bibitem{jamieson2016sh}
+K.~Jamieson and A.~Talwalkar, ``Non-stochastic best arm identification and
+hyperparameter optimization,'' in
+\emph{Proc. 19th Int. Conf. Artificial Intelligence and Statistics (AISTATS)},
+2016.
+
+\bibitem{chen2024gradient}
+C.~Chen, C.~Wagner, and J.~M. Garibaldi,
+``Gradient-based fuzzy system optimisation via automatic differentiation --
+FuzzyR as a use case,'' 2024.
+
+\bibitem{zhou2023stochastic}
+W.~Zhou, H.~Li, and M.~Bao,
+``Stochastic configuration based fuzzy inference system with interpretable fuzzy
+rules and intelligent search process,''
+\emph{Mathematics}, vol.~11, no.~3, 2023.
+
+\bibitem{chen2025casp}
+C.~Chen, J.~M. Mendel, and J.~M. Garibaldi,
+``Constraints always satisfied parameters (CASPs) for fuzzy sets optimisation,''
+\emph{IEEE Transactions on Fuzzy Systems}, in press, 2025.
+
+\bibitem{cordon2001review}
+O.~Cordón, F.~Herrera, F.~Hoffmann, and L.~Magdalena,
+``A review on the combination of evolutionary algorithms and fuzzy systems,''
+\emph{Information Sciences}, vol.~136, no.~1--4, pp.~1--38, 2001.
+
+
+\end{thebibliography}
+
+\end{document}

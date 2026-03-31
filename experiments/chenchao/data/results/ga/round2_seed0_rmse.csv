@@ -1,0 +1,2 @@
+cfg_id,mutation_rate,airfoil_rmse,laser_rmse,concrete_rmse,ankara_rmse,wine_rmse
+ga_00,0.05,8.254106521606445,8.716463088989258,12.287785530090332,4.75452995300293,0.423659086227417
